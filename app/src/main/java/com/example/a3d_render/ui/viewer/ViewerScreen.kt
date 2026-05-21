@@ -3,43 +3,43 @@ package com.example.a3d_render.ui.viewer
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.google.android.filament.utils.Manipulator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.google.android.filament.utils.Manipulator
 import io.github.sceneview.RenderQuality
 import io.github.sceneview.SceneView
+import io.github.sceneview.createEnvironment
 import io.github.sceneview.gesture.CameraGestureDetector
 import io.github.sceneview.gesture.orbitHomePosition
 import io.github.sceneview.gesture.targetPosition
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Rotation
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.rememberCameraManipulator
 import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberEnvironment
 import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberModelLoader
 import java.io.File
@@ -47,6 +47,8 @@ import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private val SkyTop = Color(0xFF5B8FD4)
+private val SkyHorizon = Color(0xFFB8D8F0)
 @Composable
 fun ViewerScreen(
     projectName: String,
@@ -59,12 +61,12 @@ fun ViewerScreen(
     val modelLoader = rememberModelLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
     var loadAttempt by remember { mutableStateOf(0) }
-    var navigationMode by rememberSaveable { mutableStateOf(NavigationMode.FREE_MOVE) }
-    val cameraManipulator = remember(navigationMode) {
-        when (navigationMode) {
-            NavigationMode.FREE_MOVE -> createFreeMoveManipulator()
-            NavigationMode.GOOGLE_EARTH -> createGoogleEarthManipulator()
-        }
+
+    val environment = rememberEnvironment(environmentLoader) {
+        environmentLoader.createKTX1Environment(
+            iblAssetFile = "environments/neutral/neutral_ibl.ktx",
+            skyboxAssetFile = "environments/neutral/neutral_skybox.ktx"
+        ) ?: createEnvironment(environmentLoader, isOpaque = true)
     }
 
     val modelPathResult by produceState<Result<String>?>(initialValue = null, glbUri, loadAttempt) {
@@ -96,7 +98,6 @@ fun ViewerScreen(
         value = ModelLoadState.Loading
 
         val instance = runCatching {
-            // For absolute/local file paths, createModelInstance(File) is the correct API.
             withContext(Dispatchers.Main) {
                 modelLoader.createModelInstance(modelFile)
             }
@@ -113,15 +114,22 @@ fun ViewerScreen(
             value = ModelLoadState.Loaded(instance)
         }
     }
+
+    val isPreparingSource = modelPathResult == null
+    val isParsingModel = resolvedModelPath != null &&
+        (modelLoadState is ModelLoadState.WaitingPath || modelLoadState is ModelLoadState.Loading)
+    val isModelLoading = isPreparingSource || isParsingModel
+
     Box(modifier = Modifier.fillMaxSize()) {
         SceneView(
             modifier = Modifier.fillMaxSize(),
             engine = engine,
             modelLoader = modelLoader,
             environmentLoader = environmentLoader,
-            renderQuality = RenderQuality.Performance,
+            environment = environment,
+            renderQuality = RenderQuality.Default,
             cameraManipulator = rememberCameraManipulator(
-                creator = { cameraManipulator }
+                creator = { createSmoothEarthLikeManipulator() }
             )
         ) {
             val loaded = modelLoadState as? ModelLoadState.Loaded
@@ -130,8 +138,46 @@ fun ViewerScreen(
                     modelInstance = state.instance,
                     scaleToUnits = 2.0f,
                     centerOrigin = Position(0f, 0f, 0f),
+                    rotation = Rotation(x = -12f, y = 28f, z = 0f),
                     autoAnimate = true
                 )
+            }
+        }
+
+        if (isModelLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                SkyTop.copy(alpha = 0.55f),
+                                SkyHorizon.copy(alpha = 0.45f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                            shape = RoundedCornerShape(16.dp)
+                        )
+                        .padding(horizontal = 18.dp, vertical = 16.dp)
+                ) {
+                    CircularProgressIndicator()
+                    Text(
+                        text = if (modelPathResult == null) {
+                            "Preparing model source..."
+                        } else {
+                            "Loading 3D model..."
+                        },
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
         }
 
@@ -147,8 +193,8 @@ fun ViewerScreen(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.75f)
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)
                             )
                         ),
                         shape = RoundedCornerShape(12.dp)
@@ -164,37 +210,10 @@ fun ViewerScreen(
                         modelLoadState is ModelLoadState.Failed ->
                             (modelLoadState as ModelLoadState.Failed).message
                         modelLoadState is ModelLoadState.Loading -> "Loading 3D model..."
-                        else -> when (navigationMode) {
-                            NavigationMode.FREE_MOVE ->
-                                "Free mode: drag rotate, two-finger drag pan, pinch fast zoom"
-                            NavigationMode.GOOGLE_EARTH ->
-                                "Earth mode: smooth orbit, map-like pan, momentum zoom"
-                        }
+                        else -> "Drag to orbit · Pinch to zoom · Two fingers to pan"
                     },
                     style = MaterialTheme.typography.bodyMedium
                 )
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                        shape = RoundedCornerShape(16.dp)
-                    )
-                    .padding(horizontal = 6.dp, vertical = 4.dp)
-            ) {
-                TextButton(
-                    onClick = { navigationMode = NavigationMode.FREE_MOVE },
-                    enabled = navigationMode != NavigationMode.FREE_MOVE
-                ) {
-                    Text("Free move")
-                }
-                TextButton(
-                    onClick = { navigationMode = NavigationMode.GOOGLE_EARTH },
-                    enabled = navigationMode != NavigationMode.GOOGLE_EARTH
-                ) {
-                    Text("Google Earth")
-                }
             }
             if (modelPathResult?.isFailure == true || modelLoadState is ModelLoadState.Failed) {
                 Button(onClick = { loadAttempt += 1 }) {
@@ -264,7 +283,7 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
         else -> throw IllegalArgumentException("Unsupported source URI scheme: ${parsed.scheme}")
     }
 }.onFailure { throwable ->
-    Log.e("ViewerScreen", "resolveModelPath failed for uri=$sourceUri", throwable)
+    Log.e(TAG, "resolveModelPath failed for uri=$sourceUri", throwable)
 }.recoverCatching { throwable ->
     val reason = throwable.message ?: throwable.javaClass.simpleName
     throw IllegalStateException("Unable to read selected GLB: $reason", throwable)
@@ -272,38 +291,17 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
 
 private const val TAG = "ViewerScreen"
 
-private fun createGoogleEarthManipulator(): CameraGestureDetector.CameraManipulator {
+private fun createSmoothEarthLikeManipulator(): CameraGestureDetector.CameraManipulator {
     val baseManipulator = Manipulator.Builder()
         .targetPosition(Position(0f, 0.6f, 0f))
-        .orbitHomePosition(Position(0f, 1.8f, 4.2f))
-        .orbitSpeed(0.0023f, 0.0023f)
-        .zoomSpeed(0.082f)
+        .orbitHomePosition(Position(0.8f, 1.8f, 4.2f))
+        .orbitSpeed(0.0022f, 0.0022f)
+        .zoomSpeed(0.065f)
         .build(Manipulator.Mode.ORBIT)
 
     return CameraGestureDetector.DefaultCameraManipulator(
         manipulator = baseManipulator,
-        pinchZoomSpeed = 1f / 18f,
-        pinchZoomDamping = 0.84f
+        pinchZoomSpeed = 1f / 24f,
+        pinchZoomDamping = 0.86f
     )
-}
-
-private fun createFreeMoveManipulator(): CameraGestureDetector.CameraManipulator {
-    val baseManipulator = Manipulator.Builder()
-        .targetPosition(Position(0f, 0.6f, 0f))
-        .orbitHomePosition(Position(0f, 1.8f, 4.2f))
-        // Faster orbit and zoom to feel less axis-locked and more free.
-        .orbitSpeed(0.0032f, 0.0032f)
-        .zoomSpeed(0.095f)
-        .build(Manipulator.Mode.MAP)
-
-    return CameraGestureDetector.DefaultCameraManipulator(
-        manipulator = baseManipulator,
-        pinchZoomSpeed = 1f / 14f,
-        pinchZoomDamping = 0.88f
-    )
-}
-
-private enum class NavigationMode {
-    FREE_MOVE,
-    GOOGLE_EARTH
 }
