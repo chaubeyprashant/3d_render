@@ -1,20 +1,33 @@
 package com.example.a3d_render.ui.viewer
 
+import android.app.Activity
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import androidx.core.view.WindowCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -23,18 +36,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import android.graphics.BitmapFactory
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.example.a3d_render.R
-import io.github.sceneview.RenderQuality
+import com.example.a3d_render.util.DeviceCapabilities
 import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
@@ -61,6 +76,8 @@ fun ViewerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val renderQuality = remember(context) { DeviceCapabilities.viewerRenderQuality(context) }
+    val autoAnimateModel = remember(context) { DeviceCapabilities.shouldAutoAnimateModel(context) }
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
@@ -130,11 +147,17 @@ fun ViewerScreen(
     val loadedState = modelLoadState as? ModelLoadState.Loaded
 
     val cameraManipulator = remember { ViewerCameraController.buildManipulator() }
+    val doubleTapPanHandler = remember(cameraManipulator) {
+        ViewerDoubleTapPanHandler { cameraManipulator }
+    }
+    var sceneViewHeightPx by remember { mutableStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         ViewerGridBackground(modifier = Modifier.fillMaxSize())
         SceneView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { sceneViewHeightPx = it.height },
             surfaceType = SurfaceType.TextureSurface,
             isOpaque = false,
             engine = engine,
@@ -142,15 +165,22 @@ fun ViewerScreen(
             materialLoader = materialLoader,
             environmentLoader = environmentLoader,
             environment = environment,
-            renderQuality = RenderQuality.Default,
-            cameraManipulator = cameraManipulator
+            renderQuality = renderQuality,
+            cameraManipulator = cameraManipulator,
+            onTouchEvent = { event, _ ->
+                if (sceneViewHeightPx > 0) {
+                    doubleTapPanHandler.onTouchEvent(event, sceneViewHeightPx)
+                } else {
+                    false
+                }
+            }
         ) {
             loadedState?.let { state ->
                 ModelNode(
                     modelInstance = state.instance,
                     scaleToUnits = ViewerCameraController.MODEL_UNITS,
                     centerOrigin = Position(0f, 0f, 0f),
-                    autoAnimate = true,
+                    autoAnimate = autoAnimateModel,
                     apply = { applyTerrainHeightExaggeration() }
                 )
             }
@@ -186,58 +216,104 @@ fun ViewerScreen(
             }
         }
 
-        Column(
+        ViewerHeader(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .padding(top = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
+                .zIndex(1f),
+            projectName = projectName,
+            onBack = onBack
+        )
+
+        if (modelPathResult?.isFailure == true || modelLoadState is ModelLoadState.Failed) {
+            Column(
                 modifier = Modifier
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                                MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.82f)
-                            )
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
                     text = when {
-                        modelPathResult == null -> "Preparing model source..."
-                        resolvedModelPath == null ->
+                        modelPathResult?.isFailure == true ->
                             modelPathResult?.exceptionOrNull()?.message
                                 ?: "Unable to open GLB from the selected source."
-                        modelLoadState is ModelLoadState.Failed ->
-                            (modelLoadState as ModelLoadState.Failed).message
-                        modelLoadState is ModelLoadState.Loading -> "Loading 3D model..."
-                        else ->
-                            "One finger: rotate · Two fingers slide: pan · Pinch: zoom"
+                        else -> (modelLoadState as ModelLoadState.Failed).message
                     },
+                    color = Color.White,
                     style = MaterialTheme.typography.bodyMedium
                 )
-            }
-            if (modelPathResult?.isFailure == true || modelLoadState is ModelLoadState.Failed) {
                 Button(onClick = { loadAttempt += 1 }) {
                     Text("Retry")
                 }
             }
-            if (modelLoadState is ModelLoadState.Loaded) {
+        }
+
+        if (modelLoadState is ModelLoadState.Loaded) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 20.dp)
+                    .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
                 Text(
-                    text = projectName,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = projectSource,
-                    color = Color.White.copy(alpha = 0.9f),
+                    text = "One finger: rotate · Double-tap & hold: pan · Pinch: zoom",
+                    color = Color.White.copy(alpha = 0.92f),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ViewerHeader(
+    projectName: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? Activity)?.window
+        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
+        val previousLightStatusBars = controller?.isAppearanceLightStatusBars
+        controller?.isAppearanceLightStatusBars = false
+        onDispose {
+            if (previousLightStatusBars != null) {
+                controller?.isAppearanceLightStatusBars = previousLightStatusBars
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(Color.Black)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 4.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+            Text(
+                text = projectName,
+                modifier = Modifier.weight(1f),
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.width(48.dp))
         }
     }
 }
@@ -335,8 +411,13 @@ private const val GRID_TILE_SCALE = 0.62f
 @Composable
 private fun ViewerGridBackground(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val gridImage = remember(context) {
-        BitmapFactory.decodeResource(context.resources, R.drawable.viewer_grid_background)
+    val sampleSize = remember(context) { DeviceCapabilities.gridBitmapSampleSize(context) }
+    val gridImage = remember(context, sampleSize) {
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+        }
+        BitmapFactory.decodeResource(context.resources, R.drawable.viewer_grid_background, options)
             .asImageBitmap()
     }
     Box(

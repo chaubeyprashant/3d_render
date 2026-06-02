@@ -32,7 +32,8 @@ android {
 
     defaultConfig {
         applicationId = "com.example.a3d_render"
-        minSdk = 24
+        // Android 10 (API 29)+; tuned for ~4 GB RAM devices.
+        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"

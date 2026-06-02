@@ -15,8 +15,8 @@ import io.github.sceneview.math.slerp
  *
  * Gestures (handled by SceneView + Filament ORBIT manipulator):
  * - One finger drag → orbit (rotate around model)
+ * - Double-tap and hold + drag → pan
  * - Two finger pinch → zoom
- * - Two finger parallel drag → pan (shift view; model stays centered in world)
  */
 object ViewerCameraController {
     const val MODEL_UNITS = 2.0f
@@ -39,7 +39,10 @@ object ViewerCameraController {
             inner = defaultManipulator,
             orbitDragScale = ORBIT_DRAG_SCALE,
             panDragScale = PAN_DRAG_SCALE,
-            activeSmoothSpeed = ACTIVE_SMOOTH_SPEED,
+            orbitTouchSmoothing = ORBIT_TOUCH_SMOOTHING,
+            panTouchSmoothing = PAN_TOUCH_SMOOTHING,
+            orbitActiveSmoothSpeed = ORBIT_ACTIVE_SMOOTH_SPEED,
+            panActiveSmoothSpeed = PAN_ACTIVE_SMOOTH_SPEED,
             idleSmoothSpeed = IDLE_SMOOTH_SPEED
         )
     }
@@ -50,27 +53,35 @@ object ViewerCameraController {
     private const val ORBIT_SPEED_X = 0.00090f
     private const val ORBIT_SPEED_Y = 0.00070f
     private const val ZOOM_SPEED = 0.058f
-    private const val PINCH_ZOOM_SPEED = 1f / 24f
-    private const val PINCH_ZOOM_DAMPING = 0.76f
+    private const val PINCH_ZOOM_SPEED = 1f / 28f
+    private const val PINCH_ZOOM_DAMPING = 0.86f
 
     /** One-finger orbit; raised slightly from 0.22 for a snappier rotate. */
-    private const val ORBIT_DRAG_SCALE = 0.32f
-    private const val PAN_DRAG_SCALE = 0.88f
+    private const val ORBIT_DRAG_SCALE = 1.4f
+    /** Two-finger pan — higher = less finger travel for the same shift. */
+    private const val PAN_DRAG_SCALE = 1.48f
 
-    /** Smooth follow while dragging / pinching. */
-    private const val ACTIVE_SMOOTH_SPEED = 18f
-    /** Soft glide after fingers lift. */
-    private const val IDLE_SMOOTH_SPEED = 7f
+    /** EMA on prior touch delta — higher = smoother orbit/pan (zoom unchanged). */
+    private const val ORBIT_TOUCH_SMOOTHING = 0.84f
+    private const val PAN_TOUCH_SMOOTHING = 0.62f
+    private const val ORBIT_ACTIVE_SMOOTH_SPEED = 5f
+    private const val PAN_ACTIVE_SMOOTH_SPEED = 11f
+    /** Soft glide after orbit/pan ends. */
+    private const val IDLE_SMOOTH_SPEED = 3f
 }
 
 /**
- * Fractional touch deltas + slerp-smoothed camera each frame (during and after gestures).
+ * Fractional touch deltas + EMA input filtering + slerp-smoothed orbit/pan.
+ * Pinch zoom follows the inner manipulator directly (no extra lag).
  */
 private class SmoothCameraManipulator(
     private val inner: CameraGestureDetector.CameraManipulator,
     private val orbitDragScale: Float,
     private val panDragScale: Float,
-    private val activeSmoothSpeed: Float,
+    private val orbitTouchSmoothing: Float,
+    private val panTouchSmoothing: Float,
+    private val orbitActiveSmoothSpeed: Float,
+    private val panActiveSmoothSpeed: Float,
     private val idleSmoothSpeed: Float,
 ) : CameraGestureDetector.CameraManipulator {
 
@@ -78,6 +89,8 @@ private class SmoothCameraManipulator(
     private var proxyY = 0f
     private var lastTouchX = 0f
     private var lastTouchY = 0f
+    private var smoothedDeltaX = 0f
+    private var smoothedDeltaY = 0f
     private var isPanning = false
     private var isGrabbing = false
     private var isScrolling = false
@@ -96,6 +109,8 @@ private class SmoothCameraManipulator(
         lastTouchY = y.toFloat()
         proxyX = lastTouchX
         proxyY = lastTouchY
+        smoothedDeltaX = 0f
+        smoothedDeltaY = 0f
         inner.grabBegin(x, y, strafe)
         smoothedTransform = inner.getTransform()
     }
@@ -104,16 +119,26 @@ private class SmoothCameraManipulator(
         val dragScale = if (isPanning) panDragScale else orbitDragScale
         val xf = x.toFloat()
         val yf = y.toFloat()
-        proxyX += (xf - lastTouchX) * dragScale
-        proxyY += (yf - lastTouchY) * dragScale
+        val rawDeltaX = (xf - lastTouchX) * dragScale
+        val rawDeltaY = (yf - lastTouchY) * dragScale
         lastTouchX = xf
         lastTouchY = yf
+
+        val touchSmoothing = if (isPanning) panTouchSmoothing else orbitTouchSmoothing
+        val blend = 1f - touchSmoothing
+        smoothedDeltaX = smoothedDeltaX * touchSmoothing + rawDeltaX * blend
+        smoothedDeltaY = smoothedDeltaY * touchSmoothing + rawDeltaY * blend
+
+        proxyX += smoothedDeltaX
+        proxyY += smoothedDeltaY
         inner.grabUpdate(proxyX.toInt(), proxyY.toInt())
     }
 
     override fun grabEnd() {
         isPanning = false
         isGrabbing = false
+        smoothedDeltaX = 0f
+        smoothedDeltaY = 0f
         inner.grabEnd()
     }
 
@@ -136,15 +161,23 @@ private class SmoothCameraManipulator(
         inner.update(deltaTime)
         val target = inner.getTransform()
         val current = smoothedTransform
-        val speed = if (isGrabbing || isScrolling) activeSmoothSpeed else idleSmoothSpeed
         smoothedTransform = when {
             current == null -> target
-            else -> slerp(
-                start = current,
-                end = target,
-                deltaSeconds = lastDeltaSeconds.toDouble(),
-                speed = speed
-            )
+            // Pinch zoom: no extra slerp — keep current zoom feel.
+            isScrolling -> target
+            else -> {
+                val speed = when {
+                    isGrabbing && isPanning -> panActiveSmoothSpeed
+                    isGrabbing -> orbitActiveSmoothSpeed
+                    else -> idleSmoothSpeed
+                }
+                slerp(
+                    start = current,
+                    end = target,
+                    deltaSeconds = lastDeltaSeconds.toDouble(),
+                    speed = speed
+                )
+            }
         }
     }
 }
