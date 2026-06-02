@@ -87,15 +87,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.a3d_render.domain.model.ProjectItem
 import com.example.a3d_render.domain.model.ProjectSource
-import com.example.a3d_render.ui.theme.AccentAmber
-import com.example.a3d_render.ui.theme.AccentBlue
-import com.example.a3d_render.ui.theme.AccentPink
-import com.example.a3d_render.ui.theme.AccentTeal
-import com.example.a3d_render.ui.theme.AccentViolet
-import com.example.a3d_render.ui.theme.HeroCyanGlow
-import com.example.a3d_render.ui.theme.HeroDeepBlue
-import com.example.a3d_render.ui.theme.HeroIndigo
-import com.example.a3d_render.ui.theme.HeroViolet
+import com.example.a3d_render.ui.theme.HeroDark
+import com.example.a3d_render.ui.theme.HeroHighlight
+import com.example.a3d_render.ui.theme.HeroLight
+import com.example.a3d_render.ui.theme.HeroMid
+import com.example.a3d_render.ui.theme.MonoAccentDim
+import com.example.a3d_render.ui.theme.MonoAccentMid
+import com.example.a3d_render.ui.theme.MonoAccentSoft
+import com.example.a3d_render.ui.theme.MonoAccentStrong
+import com.example.a3d_render.ui.theme.MonoOnSurfaceMuted
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -332,9 +332,9 @@ private fun AnimatedMeshBackground() {
         label = "orb2_angle"
     )
 
-    val orbColor1 = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-    val orbColor2 = AccentViolet.copy(alpha = 0.16f)
-    val orbColor3 = AccentTeal.copy(alpha = 0.14f)
+    val orbColor1 = Color.White.copy(alpha = 0.06f)
+    val orbColor2 = Color.White.copy(alpha = 0.04f)
+    val orbColor3 = Color.White.copy(alpha = 0.03f)
 
     Canvas(modifier = Modifier.fillMaxSize()) {
         val w = size.width
@@ -409,7 +409,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
 
     Card(
         shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = HeroDeepBlue),
+        colors = CardDefaults.cardColors(containerColor = HeroDark),
         elevation = CardDefaults.cardElevation(defaultElevation = 14.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -428,7 +428,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                 .fillMaxWidth()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(HeroDeepBlue, HeroIndigo, HeroViolet),
+                        colors = listOf(HeroDark, HeroMid, HeroLight),
                         start = Offset.Zero,
                         end = Offset(1200f, 800f)
                     )
@@ -445,7 +445,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                 val cy = h * (0.2f + orbDrift * 0.3f)
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(HeroCyanGlow.copy(alpha = 0.55f), Color.Transparent),
+                        colors = listOf(Color.White.copy(alpha = 0.12f), Color.Transparent),
                         center = Offset(cx, cy),
                         radius = w * 0.6f
                     ),
@@ -456,7 +456,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                 val cy2 = h * (0.85f - orbDrift * 0.1f)
                 drawCircle(
                     brush = Brush.radialGradient(
-                        colors = listOf(AccentPink.copy(alpha = 0.35f), Color.Transparent),
+                        colors = listOf(Color.White.copy(alpha = 0.08f), Color.Transparent),
                         center = Offset(cx2, cy2),
                         radius = w * 0.45f
                     ),
@@ -479,11 +479,11 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                         modifier = Modifier
                             .size(8.dp)
                             .clip(CircleShape)
-                            .background(HeroCyanGlow)
+                            .background(HeroHighlight)
                     )
                     Text(
                         text = "WELCOME BACK",
-                        color = HeroCyanGlow,
+                        color = MonoOnSurfaceMuted,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.6.sp,
                         fontSize = 11.sp
@@ -522,7 +522,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                             Icon(
                                 imageVector = Icons.Outlined.Layers,
                                 contentDescription = null,
-                                tint = HeroCyanGlow,
+                                tint = HeroHighlight,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(6.dp))
@@ -535,7 +535,7 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                         }
                     }
                     Surface(
-                        color = HeroCyanGlow,
+                        color = HeroHighlight,
                         shape = RoundedCornerShape(14.dp)
                     ) {
                         Row(
@@ -545,13 +545,13 @@ private fun PremiumHeroCard(recentCount: Int, onPrimaryAction: () -> Unit) {
                             Icon(
                                 imageVector = Icons.Outlined.UploadFile,
                                 contentDescription = null,
-                                tint = HeroDeepBlue,
+                                tint = HeroDark,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(Modifier.width(6.dp))
                             Text(
                                 text = "Tap to load",
-                                color = HeroDeepBlue,
+                                color = HeroDark,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             )
@@ -598,7 +598,7 @@ private fun QuickActionGrid(
                 title = "Local folder",
                 subtitle = "From device storage",
                 icon = Icons.Outlined.Folder,
-                tint = AccentBlue,
+                tint = MonoAccentStrong,
                 onClick = onLocalFolderPickerClick
             )
             QuickActionTile(
@@ -606,7 +606,7 @@ private fun QuickActionGrid(
                 title = "Drive folder",
                 subtitle = "Google Drive",
                 icon = Icons.Outlined.Cloud,
-                tint = AccentViolet,
+                tint = MonoAccentMid,
                 onClick = onDriveFolderPickerClick
             )
         }
@@ -616,7 +616,7 @@ private fun QuickActionGrid(
                 title = "Local file",
                 subtitle = "Pick a .glb",
                 icon = Icons.AutoMirrored.Outlined.InsertDriveFile,
-                tint = AccentTeal,
+                tint = MonoAccentSoft,
                 onClick = onLocalFilePickerClick
             )
             QuickActionTile(
@@ -624,7 +624,7 @@ private fun QuickActionGrid(
                 title = "Drive file",
                 subtitle = "Pick a .glb",
                 icon = Icons.Outlined.Description,
-                tint = AccentAmber,
+                tint = MonoAccentDim,
                 onClick = onDriveFilePickerClick
             )
         }
@@ -702,7 +702,7 @@ private fun QuickActionTile(
                     Icon(
                         imageVector = icon,
                         contentDescription = title,
-                        tint = Color.White,
+                        tint = HeroDark,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -886,8 +886,8 @@ private fun EmptyRecentState() {
                     width = 1.dp,
                     brush = Brush.linearGradient(
                         listOf(
-                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
-                            AccentViolet.copy(alpha = 0.4f)
+                            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
+                            Color.White.copy(alpha = 0.15f)
                         )
                     ),
                     shape = RoundedCornerShape(20.dp)
@@ -901,7 +901,7 @@ private fun EmptyRecentState() {
                         .clip(RoundedCornerShape(14.dp))
                         .background(
                             Brush.linearGradient(
-                                listOf(AccentBlue, AccentViolet)
+                                listOf(MonoAccentMid, MonoAccentSoft)
                             )
                         ),
                     contentAlignment = Alignment.Center
@@ -909,7 +909,7 @@ private fun EmptyRecentState() {
                     Icon(
                         imageVector = Icons.Outlined.Layers,
                         contentDescription = null,
-                        tint = Color.White,
+                        tint = HeroDark,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -982,8 +982,8 @@ fun rememberProjectFilePicker(onPicked: (Uri) -> Unit): () -> Unit {
 // ───────────────────────────────────────────── Helpers
 
 private fun sourceAccent(source: ProjectSource): Color = when (source) {
-    ProjectSource.LOCAL -> AccentBlue
-    ProjectSource.GOOGLE_DRIVE -> AccentViolet
+    ProjectSource.LOCAL -> MonoAccentStrong
+    ProjectSource.GOOGLE_DRIVE -> MonoAccentMid
 }
 
 private fun sourceLabel(source: ProjectSource): String = when (source) {

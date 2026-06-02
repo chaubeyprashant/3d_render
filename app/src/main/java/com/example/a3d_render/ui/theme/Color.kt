@@ -2,29 +2,32 @@ package com.example.a3d_render.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val NightPrimary = Color(0xFF7DA6FF)
-val NightOnPrimary = Color(0xFF0D1B3A)
-val NightSecondary = Color(0xFF9AD7FF)
-val NightBackground = Color(0xFF0A0F1F)
-val NightSurface = Color(0xFF141A2B)
-val NightSurfaceVariant = Color(0xFF20283F)
+// Dark monochrome
+val MonoBlack = Color(0xFF000000)
+val MonoBackground = Color(0xFF0A0A0A)
+val MonoSurface = Color(0xFF141414)
+val MonoSurfaceVariant = Color(0xFF1F1F1F)
+val MonoSurfaceElevated = Color(0xFF262626)
+val MonoOnBackground = Color(0xFFF2F2F2)
+val MonoOnSurface = Color(0xFFE8E8E8)
+val MonoOnSurfaceMuted = Color(0xFF9E9E9E)
+val MonoOutline = Color(0xFF3D3D3D)
 
-val DayPrimary = Color(0xFF2458D3)
-val DayOnPrimary = Color(0xFFFFFFFF)
-val DaySecondary = Color(0xFF046C9A)
-val DayBackground = Color(0xFFF3F6FF)
-val DaySurface = Color(0xFFFFFFFF)
-val DaySurfaceVariant = Color(0xFFE7ECFA)
+// Light monochrome
+val MonoLightBackground = Color(0xFFFAFAFA)
+val MonoLightSurface = Color(0xFFFFFFFF)
+val MonoLightSurfaceVariant = Color(0xFFF0F0F0)
+val MonoLightOnBackground = Color(0xFF121212)
+val MonoLightOnSurfaceMuted = Color(0xFF5C5C5C)
 
-// Premium accent palette used by dashboard for source/action chrome
-val AccentBlue = Color(0xFF3B82F6)
-val AccentViolet = Color(0xFF8B5CF6)
-val AccentTeal = Color(0xFF14B8A6)
-val AccentAmber = Color(0xFFF59E0B)
-val AccentPink = Color(0xFFEC4899)
+// Accent steps (grayscale only — used for icons, chips, hero chrome)
+val MonoAccentStrong = Color(0xFFE0E0E0)
+val MonoAccentMid = Color(0xFF9A9A9A)
+val MonoAccentSoft = Color(0xFF707070)
+val MonoAccentDim = Color(0xFF505050)
 
-// Hero gradient (premium dark-blue → violet → cyan glow)
-val HeroDeepBlue = Color(0xFF0B1437)
-val HeroIndigo = Color(0xFF2C2F77)
-val HeroViolet = Color(0xFF6D5BD0)
-val HeroCyanGlow = Color(0xFF38BDF8)
+// Hero card gradient
+val HeroDark = Color(0xFF101010)
+val HeroMid = Color(0xFF242424)
+val HeroLight = Color(0xFF383838)
+val HeroHighlight = Color(0xFFFFFFFF)

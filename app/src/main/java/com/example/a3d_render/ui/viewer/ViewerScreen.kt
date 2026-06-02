@@ -22,33 +22,37 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageShader
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
+import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.google.android.filament.utils.Manipulator
+import com.example.a3d_render.R
 import io.github.sceneview.RenderQuality
 import io.github.sceneview.SceneView
+import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
-import io.github.sceneview.gesture.CameraGestureDetector
-import io.github.sceneview.gesture.orbitHomePosition
-import io.github.sceneview.gesture.targetPosition
 import io.github.sceneview.math.Position
-import io.github.sceneview.math.Rotation
+import io.github.sceneview.math.Scale
+import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.model.ModelInstance
-import io.github.sceneview.rememberCameraManipulator
+import io.github.sceneview.model.model
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberEnvironment
 import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberModelLoader
 import java.io.File
 import java.io.FileOutputStream
+import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-private val SkyTop = Color(0xFF5B8FD4)
-private val SkyHorizon = Color(0xFFB8D8F0)
 @Composable
 fun ViewerScreen(
     projectName: String,
@@ -59,14 +63,17 @@ fun ViewerScreen(
     val context = LocalContext.current
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
     var loadAttempt by remember { mutableStateOf(0) }
 
-    val environment = rememberEnvironment(environmentLoader) {
+    // IBL only; transparent skybox so the static Compose grid shows through empty pixels.
+    val environment = rememberEnvironment(environmentLoader, isOpaque = false) {
         environmentLoader.createKTX1Environment(
             iblAssetFile = "environments/neutral/neutral_ibl.ktx",
-            skyboxAssetFile = "environments/neutral/neutral_skybox.ktx"
-        ) ?: createEnvironment(environmentLoader, isOpaque = true)
+            skyboxAssetFile = null
+        ).takeIf { it.indirectLight != null }
+            ?: createEnvironment(environmentLoader, isOpaque = false)
     }
 
     val modelPathResult by produceState<Result<String>?>(initialValue = null, glbUri, loadAttempt) {
@@ -110,6 +117,7 @@ fun ViewerScreen(
             Log.e(TAG, "$message path=$modelPath")
             value = ModelLoadState.Failed(message)
         } else {
+            logModelBounds(instance)
             Log.i(TAG, "Model load success path=$modelPath")
             value = ModelLoadState.Loaded(instance)
         }
@@ -119,27 +127,31 @@ fun ViewerScreen(
     val isParsingModel = resolvedModelPath != null &&
         (modelLoadState is ModelLoadState.WaitingPath || modelLoadState is ModelLoadState.Loading)
     val isModelLoading = isPreparingSource || isParsingModel
+    val loadedState = modelLoadState as? ModelLoadState.Loaded
+
+    val cameraManipulator = remember { ViewerCameraController.buildManipulator() }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        ViewerGridBackground(modifier = Modifier.fillMaxSize())
         SceneView(
             modifier = Modifier.fillMaxSize(),
+            surfaceType = SurfaceType.TextureSurface,
+            isOpaque = false,
             engine = engine,
             modelLoader = modelLoader,
+            materialLoader = materialLoader,
             environmentLoader = environmentLoader,
             environment = environment,
             renderQuality = RenderQuality.Default,
-            cameraManipulator = rememberCameraManipulator(
-                creator = { createSmoothEarthLikeManipulator() }
-            )
+            cameraManipulator = cameraManipulator
         ) {
-            val loaded = modelLoadState as? ModelLoadState.Loaded
-            loaded?.let { state ->
+            loadedState?.let { state ->
                 ModelNode(
                     modelInstance = state.instance,
-                    scaleToUnits = 2.0f,
+                    scaleToUnits = ViewerCameraController.MODEL_UNITS,
                     centerOrigin = Position(0f, 0f, 0f),
-                    rotation = Rotation(x = -12f, y = 28f, z = 0f),
-                    autoAnimate = true
+                    autoAnimate = true,
+                    apply = { applyTerrainHeightExaggeration() }
                 )
             }
         }
@@ -148,14 +160,7 @@ fun ViewerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                SkyTop.copy(alpha = 0.55f),
-                                SkyHorizon.copy(alpha = 0.45f)
-                            )
-                        )
-                    ),
+                    .background(Color.Black.copy(alpha = 0.35f)),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
@@ -210,7 +215,8 @@ fun ViewerScreen(
                         modelLoadState is ModelLoadState.Failed ->
                             (modelLoadState as ModelLoadState.Failed).message
                         modelLoadState is ModelLoadState.Loading -> "Loading 3D model..."
-                        else -> "Drag to orbit · Pinch to zoom · Two fingers to pan"
+                        else ->
+                            "One finger: rotate · Two fingers slide: pan · Pinch: zoom"
                     },
                     style = MaterialTheme.typography.bodyMedium
                 )
@@ -241,6 +247,40 @@ private sealed interface ModelLoadState {
     data object Loading : ModelLoadState
     data class Loaded(val instance: ModelInstance) : ModelLoadState
     data class Failed(val message: String) : ModelLoadState
+}
+
+/**
+ * Flat terrain meshes collapse to paper-thin sheets after uniform [scaleToUnits] scaling.
+ * Stretch Y just enough so relief is visible from the default oblique camera.
+ */
+private fun io.github.sceneview.node.ModelNode.applyTerrainHeightExaggeration() {
+    val halfExtents = boundingBox.halfExtent
+    val halfX = halfExtents[0]
+    val halfY = halfExtents[1]
+    val halfZ = halfExtents[2]
+    val horizontalExtent = max(halfX, halfZ).coerceAtLeast(0.001f)
+    val flatness = halfY / horizontalExtent
+    if (flatness >= FLAT_TERRAIN_THRESHOLD) return
+
+    val exaggeration = (FLAT_TERRAIN_TARGET_RATIO / flatness.coerceAtLeast(0.001f))
+        .coerceIn(MIN_HEIGHT_EXAGGERATION, MAX_HEIGHT_EXAGGERATION)
+    scale = Scale(scale.x, scale.y * exaggeration, scale.z)
+    Log.i(
+        TAG,
+        "Applied terrain height exaggeration=${"%.1f".format(exaggeration)}x " +
+            "(halfX=$halfX halfY=$halfY halfZ=$halfZ)"
+    )
+}
+
+private fun logModelBounds(instance: ModelInstance) {
+    val box = instance.model.boundingBox
+    val half = box.halfExtent
+    val center = box.center
+    Log.i(
+        TAG,
+        "Model bounds halfExtents=(${half[0]}, ${half[1]}, ${half[2]}) " +
+            "center=(${center[0]}, ${center[1]}, ${center[2]})"
+    )
 }
 
 private fun resolveModelPath(context: Context, sourceUri: String): Result<String> = runCatching {
@@ -289,19 +329,38 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
     throw IllegalStateException("Unable to read selected GLB: $reason", throwable)
 }
 
-private const val TAG = "ViewerScreen"
+/** Values below 1 shrink each grid tile (finer / closer lines). */
+private const val GRID_TILE_SCALE = 0.62f
 
-private fun createSmoothEarthLikeManipulator(): CameraGestureDetector.CameraManipulator {
-    val baseManipulator = Manipulator.Builder()
-        .targetPosition(Position(0f, 0.6f, 0f))
-        .orbitHomePosition(Position(0.8f, 1.8f, 4.2f))
-        .orbitSpeed(0.0022f, 0.0022f)
-        .zoomSpeed(0.065f)
-        .build(Manipulator.Mode.ORBIT)
-
-    return CameraGestureDetector.DefaultCameraManipulator(
-        manipulator = baseManipulator,
-        pinchZoomSpeed = 1f / 24f,
-        pinchZoomDamping = 0.86f
+@Composable
+private fun ViewerGridBackground(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val gridImage = remember(context) {
+        BitmapFactory.decodeResource(context.resources, R.drawable.viewer_grid_background)
+            .asImageBitmap()
+    }
+    Box(
+        modifier = modifier.drawWithCache {
+            val shader = ImageShader(
+                image = gridImage,
+                tileModeX = TileMode.Repeated,
+                tileModeY = TileMode.Repeated
+            )
+            shader.setLocalMatrix(
+                android.graphics.Matrix().apply {
+                    setScale(GRID_TILE_SCALE, GRID_TILE_SCALE)
+                }
+            )
+            val brush = ShaderBrush(shader)
+            onDrawBehind {
+                drawRect(brush = brush)
+            }
+        }
     )
 }
+
+private const val TAG = "ViewerScreen"
+private const val FLAT_TERRAIN_THRESHOLD = 0.08f
+private const val FLAT_TERRAIN_TARGET_RATIO = 0.18f
+private const val MIN_HEIGHT_EXAGGERATION = 4f
+private const val MAX_HEIGHT_EXAGGERATION = 24f
