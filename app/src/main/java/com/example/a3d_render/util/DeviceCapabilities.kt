@@ -6,7 +6,7 @@ import android.os.Build
 import io.github.sceneview.RenderQuality
 
 /**
- * Runtime checks for low-end phones (Android 10 class, ~4 GB RAM).
+ * Runtime profile for industrial controllers (~4 GB RAM, Snapdragon 6 class).
  */
 object DeviceCapabilities {
 
@@ -24,10 +24,16 @@ object DeviceCapabilities {
         return memoryInfo.totalMem <= LOW_RAM_TOTAL_BYTES
     }
 
+    /** Always use the lightweight Filament preset on constrained hardware. */
     fun viewerRenderQuality(context: Context): RenderQuality =
         if (isLowRamDevice(context)) RenderQuality.Performance else RenderQuality.Default
 
-    /** Downsample grid bitmap on constrained devices to save heap. */
+    /** Skip the second fill light to save GPU work. */
+    fun useFillLight(context: Context): Boolean = !isLowRamDevice(context)
+
+    /** Procedural grid avoids decoding a bitmap on low RAM. */
+    fun useProceduralGridBackground(context: Context): Boolean = isLowRamDevice(context)
+
     fun gridBitmapSampleSize(context: Context): Int =
         if (isLowRamDevice(context)) 2 else 1
 

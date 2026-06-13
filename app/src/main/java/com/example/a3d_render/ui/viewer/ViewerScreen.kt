@@ -38,6 +38,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.ImageShader
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.TileMode
@@ -50,7 +52,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.example.a3d_render.R
 import com.example.a3d_render.util.DeviceCapabilities
+import com.example.a3d_render.util.GlbCacheManager
+import com.example.a3d_render.util.LargeModelLoader
 import io.github.sceneview.SceneView
+import io.github.sceneview.rememberFillLightNode
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
 import io.github.sceneview.math.Position
@@ -63,7 +68,6 @@ import io.github.sceneview.rememberEnvironment
 import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberModelLoader
 import java.io.File
-import java.io.FileOutputStream
 import kotlin.math.max
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -76,9 +80,13 @@ fun ViewerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val engine = rememberEngine()
+    val isLowRamDevice = remember(context) { DeviceCapabilities.isLowRamDevice(context) }
     val renderQuality = remember(context) { DeviceCapabilities.viewerRenderQuality(context) }
     val autoAnimateModel = remember(context) { DeviceCapabilities.shouldAutoAnimateModel(context) }
-    val engine = rememberEngine()
+    val useProceduralGrid = remember(context) { DeviceCapabilities.useProceduralGridBackground(context) }
+    val useFillLight = remember(context) { DeviceCapabilities.useFillLight(context) }
+    val fillLightNode = if (useFillLight) rememberFillLightNode(engine) else null
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
@@ -122,15 +130,21 @@ fun ViewerScreen(
         value = ModelLoadState.Loading
 
         val instance = runCatching {
-            withContext(Dispatchers.Main) {
-                modelLoader.createModelInstance(modelFile)
-            }
+            LargeModelLoader.loadFromFile(
+                context = context,
+                modelLoader = modelLoader,
+                modelFile = modelFile
+            )
         }.onFailure {
             Log.e(TAG, "Model load threw exception path=$modelPath", it)
         }.getOrNull()
 
         if (instance == null) {
-            val message = "Model parse/load failed."
+            val message = if (isLowRamDevice && modelFile.length() > 200L * 1024L * 1024L) {
+                "Large model failed to load. Close other apps and try again."
+            } else {
+                "Model parse/load failed."
+            }
             Log.e(TAG, "$message path=$modelPath")
             value = ModelLoadState.Failed(message)
         } else {
@@ -153,7 +167,11 @@ fun ViewerScreen(
     var sceneViewHeightPx by remember { mutableStateOf(0) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        ViewerGridBackground(modifier = Modifier.fillMaxSize())
+        if (useProceduralGrid) {
+            ViewerProceduralGridBackground(modifier = Modifier.fillMaxSize())
+        } else {
+            ViewerGridBackground(modifier = Modifier.fillMaxSize())
+        }
         SceneView(
             modifier = Modifier
                 .fillMaxSize()
@@ -166,6 +184,7 @@ fun ViewerScreen(
             environmentLoader = environmentLoader,
             environment = environment,
             renderQuality = renderQuality,
+            fillLightNode = fillLightNode,
             cameraManipulator = cameraManipulator,
             onTouchEvent = { event, _ ->
                 if (sceneViewHeightPx > 0) {
@@ -377,6 +396,10 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
                 context.cacheDir,
                 "active_${sourceUri.hashCode()}.glb"
             )
+            if (destination.exists() && destination.length() > 0L) {
+                return@runCatching destination.absolutePath
+            }
+            GlbCacheManager.prepareForLargeModelLoad(context, keepAbsolutePath = destination.absolutePath)
             val inputStream = context.contentResolver.openInputStream(parsed)
                 ?: context.contentResolver.openAssetFileDescriptor(parsed, "r")?.createInputStream()
                 ?: context.contentResolver.openFileDescriptor(parsed, "r")?.let { descriptor ->
@@ -387,9 +410,7 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
                 )
 
             inputStream.use { input ->
-                FileOutputStream(destination).use { output ->
-                    input.copyTo(output)
-                }
+                GlbCacheManager.copyToCache(input, destination)
             }
             require(destination.exists() && destination.length() > 0L) {
                 "Copied GLB cache file is empty."
@@ -407,6 +428,40 @@ private fun resolveModelPath(context: Context, sourceUri: String): Result<String
 
 /** Values below 1 shrink each grid tile (finer / closer lines). */
 private const val GRID_TILE_SCALE = 0.62f
+
+@Composable
+private fun ViewerProceduralGridBackground(modifier: Modifier = Modifier) {
+    val density = LocalDensity.current
+    val minorSpacing = with(density) { 28.dp.toPx() }
+    val majorEvery = 4
+    Box(
+        modifier = modifier.drawWithCache {
+            onDrawBehind {
+                drawRect(Color(0xFFF4F4F4))
+                val majorColor = Color(0xFFB8B8B8)
+                val minorColor = Color(0xFFD8D8D8)
+                var x = 0f
+                var column = 0
+                while (x <= size.width) {
+                    val color = if (column % majorEvery == 0) majorColor else minorColor
+                    val stroke = if (column % majorEvery == 0) 1.5f else 1f
+                    drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = stroke)
+                    x += minorSpacing
+                    column++
+                }
+                var y = 0f
+                var row = 0
+                while (y <= size.height) {
+                    val color = if (row % majorEvery == 0) majorColor else minorColor
+                    val stroke = if (row % majorEvery == 0) 1.5f else 1f
+                    drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = stroke)
+                    y += minorSpacing
+                    row++
+                }
+            }
+        }
+    )
+}
 
 @Composable
 private fun ViewerGridBackground(modifier: Modifier = Modifier) {

@@ -5,11 +5,11 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.example.a3d_render.domain.model.ProjectItem
 import com.example.a3d_render.domain.model.ProjectSource
+import com.example.a3d_render.util.GlbCacheManager
 import java.io.File
 import java.io.FileOutputStream
 
 object ProjectScanner {
-    private const val MAX_GLB_SIZE_BYTES = 150L * 1024L * 1024L
 
     fun validateAndBuildProject(
         context: Context,
@@ -30,18 +30,14 @@ object ProjectScanner {
             )
         }
 
-        if (glbFile.length() > MAX_GLB_SIZE_BYTES) {
-            return Result.failure(
-                IllegalArgumentException("GLB exceeds 150MB supported limit.")
-            )
-        }
-
         val folderName = folder.name?.ifBlank { null } ?: "Untitled Project"
         val projectName = folderName.substringBeforeLast(".")
+        val destination = File(context.filesDir, "glb_cache_${folder.uri.toString().hashCode()}.glb")
+        GlbCacheManager.prepareForLargeModelLoad(context, keepAbsolutePath = destination.absolutePath)
         val localGlbPath = cacheGlbLocally(
             context = context,
             glbUri = glbFile.uri,
-            projectId = folder.uri.toString()
+            destination = destination
         )
 
         return Result.success(
@@ -81,18 +77,14 @@ object ProjectScanner {
             )
         }
 
-        if (file.length() > MAX_GLB_SIZE_BYTES) {
-            return Result.failure(
-                IllegalArgumentException("GLB exceeds 150MB supported limit.")
-            )
-        }
-
         val name = file.name.orEmpty()
         val projectName = name.substringBeforeLast(".").ifBlank { "Untitled Project" }
+        val destination = File(context.filesDir, "glb_cache_${file.uri.toString().hashCode()}.glb")
+        GlbCacheManager.prepareForLargeModelLoad(context, keepAbsolutePath = destination.absolutePath)
         val localGlbPath = cacheGlbLocally(
             context = context,
             glbUri = file.uri,
-            projectId = file.uri.toString()
+            destination = destination
         )
         return Result.success(
             ProjectItem(
@@ -130,14 +122,13 @@ object ProjectScanner {
     private fun cacheGlbLocally(
         context: Context,
         glbUri: Uri,
-        projectId: String
+        destination: File
     ): String {
-        val destination = File(context.filesDir, "glb_cache_${projectId.hashCode()}.glb")
-        context.contentResolver.openInputStream(glbUri)?.use { input ->
-            FileOutputStream(destination).use { output ->
-                input.copyTo(output)
-            }
-        } ?: throw IllegalArgumentException("Failed to read GLB data from selected source.")
+        val inputStream = context.contentResolver.openInputStream(glbUri)
+            ?: throw IllegalArgumentException("Failed to read GLB data from selected source.")
+        inputStream.use { input ->
+            GlbCacheManager.copyToCache(input, destination)
+        }
 
         if (!destination.exists() || destination.length() <= 0L) {
             throw IllegalArgumentException("Imported GLB is empty after local copy.")

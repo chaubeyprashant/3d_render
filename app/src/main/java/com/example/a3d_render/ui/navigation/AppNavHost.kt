@@ -20,7 +20,6 @@ import com.example.a3d_render.ui.access.AccessLockedScreen
 import com.example.a3d_render.ui.access.AccessSplashScreen
 import com.example.a3d_render.ui.dashboard.DashboardScreen
 import com.example.a3d_render.ui.dashboard.DashboardViewModel
-import com.example.a3d_render.ui.dashboard.rememberProjectFilePicker
 import com.example.a3d_render.ui.dashboard.rememberProjectFolderPicker
 import com.example.a3d_render.ui.viewer.ViewerScreen
 
@@ -85,28 +84,10 @@ fun AppNavHost(appContainer: AppContainer) {
                     navController.navigate(project.viewerRoute())
                 }
             }
-            val drivePicker = rememberProjectFolderPicker { uri ->
-                dashboardViewModel.onProjectFolderPicked(uri, ProjectSource.GOOGLE_DRIVE) { project ->
-                    navController.navigate(project.viewerRoute())
-                }
-            }
-            val localFilePicker = rememberProjectFilePicker { uri ->
-                dashboardViewModel.onProjectFilePicked(uri, ProjectSource.LOCAL) { project ->
-                    navController.navigate(project.viewerRoute())
-                }
-            }
-            val driveFilePicker = rememberProjectFilePicker { uri ->
-                dashboardViewModel.onProjectFilePicked(uri, ProjectSource.GOOGLE_DRIVE) { project ->
-                    navController.navigate(project.viewerRoute())
-                }
-            }
 
             DashboardScreen(
                 uiState = uiState,
                 onLocalFolderPickerClick = localPicker,
-                onDriveFolderPickerClick = drivePicker,
-                onLocalFilePickerClick = localFilePicker,
-                onDriveFilePickerClick = driveFilePicker,
                 onOpenProject = { navController.navigate(it.viewerRoute()) },
                 onRenameProject = dashboardViewModel::renameProject,
                 onDismissError = dashboardViewModel::clearError

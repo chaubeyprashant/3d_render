@@ -2,7 +2,6 @@ package com.example.a3d_render.ui.dashboard
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts.OpenDocument
 import androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -42,10 +41,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.outlined.Cloud
-import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Layers
@@ -91,7 +87,6 @@ import com.example.a3d_render.ui.theme.HeroDark
 import com.example.a3d_render.ui.theme.HeroHighlight
 import com.example.a3d_render.ui.theme.HeroLight
 import com.example.a3d_render.ui.theme.HeroMid
-import com.example.a3d_render.ui.theme.MonoAccentDim
 import com.example.a3d_render.ui.theme.MonoAccentMid
 import com.example.a3d_render.ui.theme.MonoAccentSoft
 import com.example.a3d_render.ui.theme.MonoAccentStrong
@@ -107,9 +102,6 @@ import kotlin.math.sin
 fun DashboardScreen(
     uiState: DashboardUiState,
     onLocalFolderPickerClick: () -> Unit,
-    onDriveFolderPickerClick: () -> Unit,
-    onLocalFilePickerClick: () -> Unit,
-    onDriveFilePickerClick: () -> Unit,
     onOpenProject: (ProjectItem) -> Unit,
     onRenameProject: (projectId: String, newName: String) -> Unit,
     onDismissError: () -> Unit
@@ -152,16 +144,11 @@ fun DashboardScreen(
                 item {
                     SectionHeader(
                         title = "Quick actions",
-                        subtitle = "Pick a source to load a GLB"
+                        subtitle = "Select a local folder containing a GLB"
                     )
                 }
                 item {
-                    QuickActionGrid(
-                        onLocalFolderPickerClick = onLocalFolderPickerClick,
-                        onDriveFolderPickerClick = onDriveFolderPickerClick,
-                        onLocalFilePickerClick = onLocalFilePickerClick,
-                        onDriveFilePickerClick = onDriveFilePickerClick
-                    )
+                    QuickActionLocalFolder(onClick = onLocalFolderPickerClick)
                 }
                 item {
                     SectionHeader(
@@ -585,50 +572,15 @@ private fun SectionHeader(title: String, subtitle: String) {
 // ───────────────────────────────────────────── Quick actions
 
 @Composable
-private fun QuickActionGrid(
-    onLocalFolderPickerClick: () -> Unit,
-    onDriveFolderPickerClick: () -> Unit,
-    onLocalFilePickerClick: () -> Unit,
-    onDriveFilePickerClick: () -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionTile(
-                modifier = Modifier.weight(1f),
-                title = "Local folder",
-                subtitle = "From device storage",
-                icon = Icons.Outlined.Folder,
-                tint = MonoAccentStrong,
-                onClick = onLocalFolderPickerClick
-            )
-            QuickActionTile(
-                modifier = Modifier.weight(1f),
-                title = "Drive folder",
-                subtitle = "Google Drive",
-                icon = Icons.Outlined.Cloud,
-                tint = MonoAccentMid,
-                onClick = onDriveFolderPickerClick
-            )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionTile(
-                modifier = Modifier.weight(1f),
-                title = "Local file",
-                subtitle = "Pick a .glb",
-                icon = Icons.AutoMirrored.Outlined.InsertDriveFile,
-                tint = MonoAccentSoft,
-                onClick = onLocalFilePickerClick
-            )
-            QuickActionTile(
-                modifier = Modifier.weight(1f),
-                title = "Drive file",
-                subtitle = "Pick a .glb",
-                icon = Icons.Outlined.Description,
-                tint = MonoAccentDim,
-                onClick = onDriveFilePickerClick
-            )
-        }
-    }
+private fun QuickActionLocalFolder(onClick: () -> Unit) {
+    QuickActionTile(
+        modifier = Modifier.fillMaxWidth(),
+        title = "Local folder",
+        subtitle = "From device storage",
+        icon = Icons.Outlined.Folder,
+        tint = MonoAccentStrong,
+        onClick = onClick
+    )
 }
 
 @Composable
@@ -922,7 +874,7 @@ private fun EmptyRecentState() {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Use a quick action above to load your first GLB.",
+                        text = "Select a local folder above to load your first GLB.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -967,16 +919,6 @@ fun rememberProjectFolderPicker(onPicked: (Uri) -> Unit): () -> Unit {
         if (uri != null) onPicked(uri)
     }
     return { launcher.launch(null) }
-}
-
-@Composable
-fun rememberProjectFilePicker(onPicked: (Uri) -> Unit): () -> Unit {
-    val launcher = rememberLauncherForActivityResult(OpenDocument()) { uri ->
-        if (uri != null) onPicked(uri)
-    }
-    return {
-        launcher.launch(arrayOf("model/gltf-binary", "application/octet-stream", "*/*"))
-    }
 }
 
 // ───────────────────────────────────────────── Helpers
