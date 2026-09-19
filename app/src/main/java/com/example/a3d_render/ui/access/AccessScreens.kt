@@ -64,7 +64,7 @@ fun AccessSplashScreen() {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "AIMS 3D",
+                text = "INDOWINGS",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )

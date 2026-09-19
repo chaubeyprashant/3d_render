@@ -87,6 +87,7 @@ import com.example.a3d_render.ui.theme.HeroDark
 import com.example.a3d_render.ui.theme.HeroHighlight
 import com.example.a3d_render.ui.theme.HeroLight
 import com.example.a3d_render.ui.theme.HeroMid
+import com.example.a3d_render.ui.theme.IndowingsGreen
 import com.example.a3d_render.ui.theme.MonoAccentMid
 import com.example.a3d_render.ui.theme.MonoAccentSoft
 import com.example.a3d_render.ui.theme.MonoAccentStrong
@@ -261,12 +262,12 @@ private fun DashboardHeader() {
     ) {
         Column {
             Text(
-                text = "AIMS 3D",
+                text = "INDOWINGS",
                 fontWeight = FontWeight.Black,
                 fontSize = 26.sp,
                 fontFamily = FontFamily.SansSerif,
                 color = MaterialTheme.colorScheme.onBackground,
-                letterSpacing = (-0.5).sp
+                letterSpacing = 1.sp
             )
             Text(
                 text = "Visualization workspace",
@@ -924,7 +925,7 @@ fun rememberProjectFolderPicker(onPicked: (Uri) -> Unit): () -> Unit {
 // ───────────────────────────────────────────── Helpers
 
 private fun sourceAccent(source: ProjectSource): Color = when (source) {
-    ProjectSource.LOCAL -> MonoAccentStrong
+    ProjectSource.LOCAL -> IndowingsGreen
     ProjectSource.GOOGLE_DRIVE -> MonoAccentMid
 }
 

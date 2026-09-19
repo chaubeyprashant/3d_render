@@ -1,53 +1,37 @@
 package com.example.a3d_render.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = MonoOnBackground,
-    onPrimary = MonoBlack,
-    secondary = MonoOnSurfaceMuted,
-    onSecondary = MonoOnBackground,
-    background = MonoBackground,
-    onBackground = MonoOnBackground,
-    surface = MonoSurface,
-    onSurface = MonoOnSurface,
-    surfaceVariant = MonoSurfaceVariant,
-    onSurfaceVariant = MonoOnSurfaceMuted,
-    surfaceContainerHigh = MonoSurfaceElevated,
-    outline = MonoOutline,
-    outlineVariant = Color(0xFF2E2E2E)
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = MonoLightOnBackground,
+private val IndowingsDarkColorScheme = darkColorScheme(
+    primary = IndowingsGreen,
     onPrimary = Color.White,
-    secondary = MonoLightOnSurfaceMuted,
-    onSecondary = MonoLightOnBackground,
-    background = MonoLightBackground,
-    onBackground = MonoLightOnBackground,
-    surface = MonoLightSurface,
-    onSurface = MonoLightOnBackground,
-    surfaceVariant = MonoLightSurfaceVariant,
-    onSurfaceVariant = MonoLightOnSurfaceMuted,
-    surfaceContainerHigh = MonoLightSurfaceVariant,
-    outline = Color(0xFFD0D0D0),
-    outlineVariant = Color(0xFFE5E5E5)
+    primaryContainer = IndowingsGreenDark,
+    onPrimaryContainer = Color.White,
+    secondary = TextWhiteMuted,
+    onSecondary = DarkBackground,
+    background = DarkBackground,
+    onBackground = TextWhite,
+    surface = DarkSurface,
+    onSurface = TextWhite,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = TextWhiteMuted,
+    surfaceContainerHigh = DarkSurfaceElevated,
+    outline = DarkOutline,
+    outlineVariant = DarkOutlineVariant,
+    error = Color(0xFFCF6679),
+    errorContainer = Color(0xFF93000A)
 )
 
 @Composable
 fun _3d_renderTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Always dark to match INDOWINGS desktop
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = IndowingsDarkColorScheme,
         typography = Typography,
         content = content
     )
