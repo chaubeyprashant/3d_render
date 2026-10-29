@@ -64,7 +64,7 @@ fun AccessSplashScreen() {
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = "INDOWINGS",
+                text = "RPAV",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )

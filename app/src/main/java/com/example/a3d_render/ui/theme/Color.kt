@@ -2,7 +2,7 @@ package com.example.a3d_render.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ── INDOWINGS Brand ──
+// ── RPAV Brand ──
 val IndowingsGreen = Color(0xFF00C853)
 val IndowingsGreenDark = Color(0xFF009624)
 val IndowingsGreenLight = Color(0xFF5EFC82)

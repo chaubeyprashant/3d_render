@@ -12,20 +12,21 @@ class FirebaseAccessRepository(
 ) : AccessRepository {
 
     override suspend fun isAppAccessEnabled(): Boolean {
-        if (!FirebaseInitializer.initializeIfNeeded(context)) return false
-
-        return runCatching {
-            val remoteConfig = FirebaseRemoteConfig.getInstance()
-            val settings = FirebaseRemoteConfigSettings.Builder()
-                .setMinimumFetchIntervalInSeconds(0)
-                .build()
-            remoteConfig.setConfigSettingsAsync(settings).await()
-            remoteConfig.setDefaultsAsync(
-                mapOf(ACCESS_FLAG_KEY to false)
-            ).await()
-            remoteConfig.fetchAndActivate().await()
-            remoteConfig.getBoolean(ACCESS_FLAG_KEY)
-        }.getOrDefault(false)
+//        if (!FirebaseInitializer.initializeIfNeeded(context)) return false
+//
+//        return runCatching {
+//            val remoteConfig = FirebaseRemoteConfig.getInstance()
+//            val settings = FirebaseRemoteConfigSettings.Builder()
+//                .setMinimumFetchIntervalInSeconds(0)
+//                .build()
+//            remoteConfig.setConfigSettingsAsync(settings).await()
+//            remoteConfig.setDefaultsAsync(
+//                mapOf(ACCESS_FLAG_KEY to false)
+//            ).await()
+//            remoteConfig.fetchAndActivate().await()
+//            remoteConfig.getBoolean(ACCESS_FLAG_KEY)
+//        }.getOrDefault(false)
+        return true
     }
 
     companion object {

@@ -15,6 +15,11 @@ object DeviceCapabilities {
 
     private const val LOW_RAM_TOTAL_BYTES = 4_500L * 1024L * 1024L
 
+    fun totalRamBytes(context: Context): Long {
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return ActivityManager.MemoryInfo().also(activityManager::getMemoryInfo).totalMem
+    }
+
     fun isLowRamDevice(context: Context): Boolean {
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         if (activityManager.isLowRamDevice) return true

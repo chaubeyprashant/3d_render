@@ -27,7 +27,7 @@ private val IndowingsDarkColorScheme = darkColorScheme(
 
 @Composable
 fun _3d_renderTheme(
-    darkTheme: Boolean = true, // Always dark to match INDOWINGS desktop
+    darkTheme: Boolean = true, // Always dark to match RPAV desktop
     content: @Composable () -> Unit
 ) {
     MaterialTheme(
