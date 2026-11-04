@@ -6,4 +6,5 @@ interface ProjectRepository {
     suspend fun getRecentProjects(): List<ProjectItem>
     suspend fun upsertProject(projectItem: ProjectItem)
     suspend fun renameProject(projectId: String, newName: String)
+    suspend fun deleteProject(projectId: String)
 }

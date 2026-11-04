@@ -3,55 +3,68 @@ package com.example.a3d_render.ui.viewer
 import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
-import android.view.PixelCopy
-import android.view.SurfaceView
+import android.view.TextureView
 import android.view.View
-import androidx.core.view.WindowCompat
+import android.view.ViewGroup
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Hd
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Sd
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled._3dRotation
+import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -60,10 +73,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -72,60 +84,84 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
-import com.example.a3d_render.ui.theme.DarkBackground
+import androidx.core.view.WindowCompat
 import com.example.a3d_render.ui.theme.DarkCard
 import com.example.a3d_render.ui.theme.DarkSurfaceVariant
 import com.example.a3d_render.ui.theme.DarkToolbar
 import com.example.a3d_render.ui.theme.DarkTopBar
-import com.example.a3d_render.ui.theme.IndowingsBlue
 import com.example.a3d_render.ui.theme.IndowingsGreen
+import com.example.a3d_render.domain.project.GlbInspector
+import com.example.a3d_render.util.ByteFormat
 import com.example.a3d_render.util.DeviceCapabilities
-import com.example.a3d_render.util.GlbCacheManager
 import com.example.a3d_render.util.LargeModelLoader
+import com.google.android.filament.Camera
+import io.github.sceneview.RenderQuality
 import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
-import io.github.sceneview.math.Position
-import io.github.sceneview.math.Scale
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.model.model
+import io.github.sceneview.rememberCameraNode
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberEnvironment
 import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberFillLightNode
 import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.roundToInt
 
 @Composable
 fun ViewerScreen(
@@ -135,16 +171,26 @@ fun ViewerScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val rootView = LocalView.current
+    val activity = remember(context) { context.findActivity() }
+    val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
+    val topBarHeight = with(LocalDensity.current) { topBarHeightPx.toDp() }
+
+    // The rotate button overrides the phone's auto-rotate only while the viewer is open.
+    DisposableEffect(activity) {
+        onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
     val engine = rememberEngine()
     val isLowRamDevice = remember(context) { DeviceCapabilities.isLowRamDevice(context) }
-    val renderQuality = remember(context) { DeviceCapabilities.viewerRenderQuality(context) }
     val autoAnimateModel = remember(context) { DeviceCapabilities.shouldAutoAnimateModel(context) }
     val useFillLight = remember(context) { DeviceCapabilities.useFillLight(context) }
     val fillLightNode = if (useFillLight) rememberFillLightNode(engine) else null
     val modelLoader = rememberModelLoader(engine)
     val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
-    var loadAttempt by remember { mutableStateOf(0) }
+    val cameraNode = rememberCameraNode(engine)
+    var loadAttempt by remember { mutableIntStateOf(0) }
 
     val environment = rememberEnvironment(environmentLoader, isOpaque = false) {
         environmentLoader.createKTX1Environment(
@@ -154,76 +200,60 @@ fun ViewerScreen(
             ?: createEnvironment(environmentLoader, isOpaque = false)
     }
 
-    val modelPathResult by produceState<Result<String>?>(initialValue = null, glbUri, loadAttempt) {
-        value = withContext(Dispatchers.IO) {
-            resolveModelPath(context = context, sourceUri = glbUri)
-        }
-    }
-    val resolvedModelPath = modelPathResult?.getOrNull()
-    val modelLoadState by produceState<ModelLoadState>(
-        initialValue = ModelLoadState.WaitingPath,
-        resolvedModelPath,
-        loadAttempt
-    ) {
-        val modelPath = resolvedModelPath
-        if (modelPath.isNullOrBlank()) {
-            value = ModelLoadState.WaitingPath
-            return@produceState
-        }
-
-        val modelFile = File(modelPath)
-        if (!modelFile.exists() || modelFile.length() <= 0L) {
-            val message = "Model file missing/empty at path: $modelPath"
-            Log.e(TAG, message)
-            value = ModelLoadState.Failed(message)
-            return@produceState
-        }
-
-        Log.i(TAG, "Model load start path=$modelPath size=${modelFile.length()}")
+    val modelFile = remember(glbUri) { File(glbUri) }
+    val modelLoadState by produceState<ModelLoadState>(ModelLoadState.Loading, glbUri, loadAttempt) {
         value = ModelLoadState.Loading
-
-        val instance = runCatching {
-            LargeModelLoader.loadFromFile(
-                context = context,
-                modelLoader = modelLoader,
-                modelFile = modelFile
-            )
-        }.onFailure {
-            Log.e(TAG, "Model load threw exception path=$modelPath", it)
-        }.getOrNull()
-
-        if (instance == null) {
-            val message = if (isLowRamDevice && modelFile.length() > 200L * 1024L * 1024L) {
-                "Large model failed to load. Close other apps and try again."
-            } else {
-                "Model parse/load failed."
+        if (!modelFile.isFile || modelFile.length() <= 0L) {
+            Log.e(TAG, "Model file missing/empty at path: $glbUri")
+            value = ModelLoadState.Failed(MISSING_MODEL_MESSAGE)
+            return@produceState
+        }
+        Log.i(TAG, "Model load start path=$glbUri size=${modelFile.length()}")
+        value = try {
+            val extensions = withContext(Dispatchers.IO) {
+                runCatching { modelFile.inputStream().use { GlbInspector.inspect(it) }.extensionsUsed }
+                    .getOrDefault(emptyList())
             }
-            Log.e(TAG, "$message path=$modelPath")
-            value = ModelLoadState.Failed(message)
-        } else {
+            val instance = LargeModelLoader.load(modelLoader, modelFile)
+            val box = instance.model.boundingBox
+            val framing = ModelFraming.compute(box.halfExtent, box.center, extensions)
             logModelBounds(instance)
-            Log.i(TAG, "Model load success path=$modelPath")
-            value = ModelLoadState.Loaded(instance)
+            Log.i(TAG, "Model load success path=$glbUri zUp=${framing.isZUp} exaggeration=${framing.heightExaggeration}")
+            ModelLoadState.Loaded(instance, framing)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (t: Throwable) {
+            Log.e(TAG, "Model load failed path=$glbUri", t)
+            ModelLoadState.Failed(loadErrorMessage(t, modelFile.length()))
         }
     }
-
-    val isPreparingSource = modelPathResult == null
-    val isParsingModel = resolvedModelPath != null &&
-        (modelLoadState is ModelLoadState.WaitingPath || modelLoadState is ModelLoadState.Loading)
-    val isModelLoading = isPreparingSource || isParsingModel
     val loadedState = modelLoadState as? ModelLoadState.Loaded
 
-    val cameraManipulator = remember { ViewerCameraController.buildManipulator() }
-    val doubleTapPanHandler = remember(cameraManipulator) {
-        ViewerDoubleTapPanHandler { cameraManipulator }
+    // Textures finish decoding over the following frames; report it without blocking navigation.
+    var textureProgress by remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(loadedState) {
+        if (loadedState == null) return@LaunchedEffect
+        val startedAt = System.nanoTime()
+        while (true) {
+            val progress = modelLoader.resourceLoader.asyncGetLoadProgress().takeUnless { it.isNaN() } ?: 1f
+            textureProgress = progress
+            if (progress >= 1f || System.nanoTime() - startedAt > TEXTURE_WAIT_TIMEOUT_NANOS) break
+            withFrameNanos { }
+        }
+        textureProgress = 1f
     }
-    var sceneViewHeightPx by remember { mutableStateOf(0) }
+
+    val cameraController = remember { ViewerCameraController() }
+    LaunchedEffect(loadedState) {
+        cameraController.setGroundClearance(loadedState?.framing?.groundTopY)
+    }
+    val gestureHandler = remember(cameraController) { ViewerGestureHandler(context, cameraController) }
+    val orthoApplied = remember { AtomicBoolean(false) }
 
     // UI state
     var showSettings by remember { mutableStateOf(false) }
-    var isHdMode by remember { mutableStateOf(true) }
+    var isHdMode by remember { mutableStateOf(!isLowRamDevice) }
     var toastMessage by remember { mutableStateOf<String?>(null) }
-    var zoomLevel by remember { mutableFloatStateOf(0.5f) }
     val coroutineScope = rememberCoroutineScope()
 
     // Auto-dismiss toast
@@ -240,9 +270,7 @@ fun ViewerScreen(
 
         // ── 3D Scene ──
         SceneView(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { sceneViewHeightPx = it.height },
+            modifier = Modifier.fillMaxSize(),
             surfaceType = SurfaceType.TextureSurface,
             isOpaque = false,
             engine = engine,
@@ -250,30 +278,41 @@ fun ViewerScreen(
             materialLoader = materialLoader,
             environmentLoader = environmentLoader,
             environment = environment,
-            renderQuality = renderQuality,
+            renderQuality = if (isHdMode) RenderQuality.Default else RenderQuality.Performance,
             fillLightNode = fillLightNode,
-            cameraManipulator = cameraManipulator,
-            onTouchEvent = { event, _ ->
-                if (sceneViewHeightPx > 0) {
-                    doubleTapPanHandler.onTouchEvent(event, sceneViewHeightPx)
-                } else {
-                    false
+            cameraNode = cameraNode,
+            cameraManipulator = cameraController,
+            onTouchEvent = { event, _ -> gestureHandler.onTouchEvent(event) },
+            onFrame = {
+                // 2D mode renders orthographically once the camera is straight down, sized to
+                // match the perspective framing so the switch is seamless.
+                if (cameraController.isOrthographic) {
+                    val halfHeight = (cameraController.renderedDistance * ViewerCameraController.TAN_HALF_FOV).toDouble()
+                    val halfWidth = halfHeight * cameraNode.getViewPortAspect()
+                    cameraNode.setProjection(
+                        Camera.Projection.ORTHO,
+                        -halfWidth, halfWidth, -halfHeight, halfHeight,
+                        ORTHO_NEAR, ORTHO_FAR
+                    )
+                    orthoApplied.set(true)
+                } else if (orthoApplied.getAndSet(false)) {
+                    cameraNode.updateProjection()
                 }
             }
         ) {
             loadedState?.let { state ->
                 ModelNode(
                     modelInstance = state.instance,
-                    scaleToUnits = ViewerCameraController.MODEL_UNITS,
-                    centerOrigin = Position(0f, 0f, 0f),
                     autoAnimate = autoAnimateModel,
-                    apply = { applyTerrainHeightExaggeration() }
+                    position = state.framing.position,
+                    rotation = state.framing.rotation,
+                    scale = state.framing.scale
                 )
             }
         }
 
         // ── Loading overlay ──
-        if (isModelLoading) {
+        if (modelLoadState is ModelLoadState.Loading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -292,83 +331,144 @@ fun ViewerScreen(
                 ) {
                     CircularProgressIndicator(color = IndowingsGreen)
                     Text(
-                        text = if (modelPathResult == null) "Preparing model source..."
-                        else "Loading 3D model...",
+                        text = "Loading 3D model…",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White
                     )
+                    if (modelFile.length() > 0L) {
+                        Text(
+                            text = ByteFormat.format(modelFile.length()),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
                 }
             }
         }
 
         // ── Top Bar ──
-        IndowingsTopBar(
+        RpavTopBar(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .zIndex(2f),
+                .zIndex(2f)
+                .onSizeChanged { topBarHeightPx = it.height },
             projectName = projectName,
+            isLandscape = isLandscape,
             onBack = onBack,
+            onRotateClick = {
+                // SENSOR_LANDSCAPE works even when the phone's auto-rotate is off.
+                activity?.requestedOrientation = if (isLandscape) {
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                } else {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                }
+            },
             onSettingsClick = { showSettings = true }
         )
 
-        // ── Error state ──
-        if (modelPathResult?.isFailure == true || modelLoadState is ModelLoadState.Failed) {
-            Column(
+        // ── Texture streaming indicator ──
+        if (loadedState != null && textureProgress < 1f) {
+            Surface(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .align(Alignment.TopCenter)
+                    .padding(top = topBarHeight + 8.dp)
+                    .zIndex(1f),
+                shape = RoundedCornerShape(16.dp),
+                color = DarkCard.copy(alpha = 0.92f)
             ) {
-                Text(
-                    text = when {
-                        modelPathResult?.isFailure == true ->
-                            modelPathResult?.exceptionOrNull()?.message
-                                ?: "Unable to open GLB from the selected source."
-                        else -> (modelLoadState as ModelLoadState.Failed).message
-                    },
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(
-                    onClick = { loadAttempt += 1 },
-                    colors = ButtonDefaults.buttonColors(containerColor = IndowingsGreen)
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Retry", color = Color.White)
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        color = IndowingsGreen,
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Loading textures… ${(textureProgress * 100).roundToInt()}%",
+                        color = Color.White,
+                        fontSize = 12.sp
+                    )
                 }
             }
         }
 
-        // ── Zoom Slider (right edge) ──
-        if (modelLoadState is ModelLoadState.Loaded) {
-            ZoomSlider(
+        // ── Error state ──
+        (modelLoadState as? ModelLoadState.Failed)?.let { failure ->
+            ModelErrorCard(
+                message = failure.message,
+                onRetry = { loadAttempt += 1 },
+                onBack = onBack,
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 8.dp)
-                    .zIndex(1f),
-                zoomLevel = zoomLevel,
-                onZoomChange = { zoomLevel = it }
+                    .align(Alignment.Center)
+                    .padding(horizontal = 24.dp)
             )
         }
 
-        // ── Bottom Toolbar ──
-        if (modelLoadState is ModelLoadState.Loaded) {
+        if (loadedState != null) Box(
+            // Below the top bar and clear of the navigation bar / camera cutout in any orientation.
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = topBarHeight)
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+                .zIndex(1f)
+        ) {
+            // ── Zoom control bar (right edge) ──
+            ZoomBar(
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 10.dp),
+                compact = isLandscape,
+                zoomFraction = cameraController.zoomFraction,
+                onZoomIn = cameraController::zoomIn,
+                onZoomOut = cameraController::zoomOut,
+                onZoomTo = cameraController::zoomTo
+            )
+
+            // ── Directional (trackball) navigation pad ──
+            // Portrait stacks it above the toolbar; landscape has room beside it.
+            NavigationPad(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(start = 12.dp, bottom = if (isLandscape) 16.dp else 112.dp),
+                viewMode = cameraController.mode,
+                onNudge = cameraController::nudge
+            )
+
+            // ── Bottom Toolbar ──
             BottomToolbar(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = 16.dp, end = 12.dp, start = 12.dp)
-                    .zIndex(1f),
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp, start = 12.dp, end = 12.dp),
+                viewMode = cameraController.mode,
                 isHdMode = isHdMode,
+                onToggleViewMode = {
+                    val next = if (cameraController.mode == ViewMode.THREE_D) ViewMode.TWO_D else ViewMode.THREE_D
+                    cameraController.switchMode(next)
+                    toastMessage = if (next == ViewMode.TWO_D) "2D top-down view" else "3D perspective view"
+                },
                 onToggleQuality = {
                     isHdMode = !isHdMode
-                    toastMessage = if (isHdMode) "HD mode enabled" else "SD mode enabled"
+                    toastMessage = if (isHdMode) "HD mode enabled" else "SD mode enabled (faster)"
                 },
-                onReset = {
-                    loadAttempt += 1
-                    toastMessage = "View reset"
+                onRecenter = {
+                    cameraController.recenter()
+                    toastMessage = "View recentered"
                 },
                 onScreenshot = {
-                    toastMessage = "Screenshot saved successfully!"
+                    val frame = findTextureView(rootView)?.bitmap
+                    if (frame == null) {
+                        toastMessage = "Screenshot unavailable — viewer not ready"
+                    } else {
+                        coroutineScope.launch {
+                            val saved = runCatching { saveScreenshot(context, frame, projectName) }
+                                .onFailure { Log.e(TAG, "Screenshot save failed", it) }
+                                .getOrNull()
+                            toastMessage = if (saved != null) "Screenshot saved to Pictures/RPAV" else "Couldn't save screenshot"
+                        }
+                    }
                 }
             )
         }
@@ -380,11 +480,11 @@ fun ViewerScreen(
             exit = slideOutVertically(tween(300)) { -it } + fadeOut(tween(300)),
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 100.dp, end = 12.dp)
+                .padding(top = topBarHeight + 8.dp, end = 12.dp)
                 .zIndex(3f)
         ) {
             toastMessage?.let { message ->
-                IndowingsToast(
+                RpavToast(
                     message = message,
                     onDismiss = { toastMessage = null }
                 )
@@ -399,13 +499,15 @@ fun ViewerScreen(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Top Bar — matches INDOWINGS desktop
+// Top Bar — matches RPAV desktop
 // ═══════════════════════════════════════════════════════════
 
 @Composable
-private fun IndowingsTopBar(
+private fun RpavTopBar(
     projectName: String,
+    isLandscape: Boolean,
     onBack: () -> Unit,
+    onRotateClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -421,18 +523,56 @@ private fun IndowingsTopBar(
             }
         }
     }
+    val dateText = SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault()).format(Date())
+    val safeTop = Modifier.windowInsetsPadding(
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+    )
 
     Column(modifier = modifier.fillMaxWidth().background(DarkTopBar)) {
-        // Top row: INDOWINGS + date + settings
+        if (isLandscape) {
+            // Single row keeps vertical space for the model.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(safeTop)
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "RPAV",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    letterSpacing = 1.sp
+                )
+                Spacer(Modifier.width(16.dp))
+                BackPill(onBack)
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = projectName,
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(text = dateText, color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
+                Spacer(Modifier.width(4.dp))
+                TopBarActions(isLandscape, onRotateClick, onSettingsClick)
+            }
+            return@Column
+        }
+
+        // Top row: RPAV + date + actions
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
+                .then(safeTop)
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "INDOWINGS",
+                text = "RPAV",
                 color = Color.White,
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp,
@@ -440,21 +580,14 @@ private fun IndowingsTopBar(
                 modifier = Modifier.weight(1f)
             )
             Text(
-                text = SimpleDateFormat("MMM dd, h:mm a", Locale.getDefault()).format(Date()),
+                text = dateText,
                 color = Color.White.copy(alpha = 0.7f),
                 fontSize = 13.sp,
                 modifier = Modifier.weight(1f),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-                IconButton(onClick = onSettingsClick) {
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                TopBarActions(isLandscape, onRotateClick, onSettingsClick)
             }
         }
         // Back button row
@@ -462,31 +595,7 @@ private fun IndowingsTopBar(
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                onClick = onBack,
-                shape = RoundedCornerShape(20.dp),
-                color = Color.Transparent,
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "Back",
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
+            BackPill(onBack)
             Spacer(Modifier.width(12.dp))
             Text(
                 text = projectName,
@@ -500,20 +609,71 @@ private fun IndowingsTopBar(
     }
 }
 
+@Composable
+private fun TopBarActions(isLandscape: Boolean, onRotateClick: () -> Unit, onSettingsClick: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = onRotateClick) {
+            Icon(
+                imageVector = Icons.Default.ScreenRotation,
+                contentDescription = if (isLandscape) "Switch to portrait" else "Switch to landscape",
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        IconButton(onClick = onSettingsClick) {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = "Settings",
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BackPill(onBack: () -> Unit) {
+    Surface(
+        onClick = onBack,
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Transparent,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "Back",
+                color = Color.White,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════
-// Bottom Toolbar — 2D Orthophoto | HD/SD | Reset | Screenshot
+// Bottom Toolbar — 2D/3D | HD/SD | Recenter | Screenshot
 // ═══════════════════════════════════════════════════════════
 
 @Composable
 private fun BottomToolbar(
     modifier: Modifier = Modifier,
+    viewMode: ViewMode,
     isHdMode: Boolean,
+    onToggleViewMode: () -> Unit,
     onToggleQuality: () -> Unit,
-    onReset: () -> Unit,
+    onRecenter: () -> Unit,
     onScreenshot: () -> Unit
 ) {
-    var screenshotActive by remember { mutableStateOf(false) }
-
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(12.dp),
@@ -525,44 +685,33 @@ private fun BottomToolbar(
             horizontalArrangement = Arrangement.spacedBy(2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 2D Orthophoto
             ToolbarButton(
-                icon = Icons.Default.Map,
-                label = "2D",
-                sublabel = "Orthophoto",
-                isActive = false,
-                onClick = { }
+                icon = if (viewMode == ViewMode.TWO_D) Icons.Default.Map else Icons.Default.ViewInAr,
+                label = if (viewMode == ViewMode.TWO_D) "2D" else "3D",
+                sublabel = "View",
+                isActive = viewMode == ViewMode.TWO_D,
+                onClick = onToggleViewMode
             )
-            // HD/SD toggle
             ToolbarButton(
-                icon = Icons.Default.Hd,
+                icon = if (isHdMode) Icons.Default.Hd else Icons.Default.Sd,
                 label = if (isHdMode) "HD" else "SD",
-                sublabel = if (isHdMode) "HD" else "SD",
+                sublabel = "Quality",
                 isActive = !isHdMode,
-                activeColor = IndowingsGreen,
                 onClick = onToggleQuality
             )
-            // Reset
             ToolbarButton(
-                icon = Icons.Default.Refresh,
-                label = "Reset",
+                icon = Icons.Default.CenterFocusStrong,
+                label = "Recenter",
                 sublabel = null,
                 isActive = false,
-                onClick = onReset
+                onClick = onRecenter
             )
-            // Screenshot
             ToolbarButton(
                 icon = Icons.Default.CameraAlt,
                 label = "Screenshot",
                 sublabel = null,
-                isActive = screenshotActive,
-                activeColor = IndowingsGreen,
-                onClick = {
-                    screenshotActive = true
-                    onScreenshot()
-                    // Reset active state after a moment
-                    screenshotActive = false
-                }
+                isActive = false,
+                onClick = onScreenshot
             )
         }
     }
@@ -587,7 +736,7 @@ private fun ToolbarButton(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
             Icon(
                 imageVector = icon,
@@ -614,71 +763,278 @@ private fun ToolbarButton(
 }
 
 // ═══════════════════════════════════════════════════════════
-// Zoom Slider (vertical, right edge)
+// Zoom control bar (vertical, right edge)
 // ═══════════════════════════════════════════════════════════
 
 @Composable
-private fun ZoomSlider(
+private fun ZoomBar(
     modifier: Modifier = Modifier,
-    zoomLevel: Float,
-    onZoomChange: (Float) -> Unit
+    compact: Boolean,
+    zoomFraction: Float,
+    onZoomIn: () -> Unit,
+    onZoomOut: () -> Unit,
+    onZoomTo: (Float) -> Unit
 ) {
-    Column(
-        modifier = modifier.width(40.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        color = DarkToolbar.copy(alpha = 0.92f),
+        shadowElevation = 8.dp
     ) {
-        // + button
-        Surface(
-            onClick = { onZoomChange((zoomLevel + 0.1f).coerceAtMost(1f)) },
-            shape = RoundedCornerShape(6.dp),
-            color = IndowingsBlue,
-            modifier = Modifier.size(32.dp)
+        Column(
+            modifier = Modifier
+                .width(44.dp)
+                .padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Zoom in",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
+            IconButton(onClick = onZoomIn, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Add, contentDescription = "Zoom in", tint = Color.White)
+            }
+            ZoomTrack(
+                fraction = zoomFraction,
+                onFractionChange = onZoomTo,
+                modifier = Modifier
+                    .width(44.dp)
+                    .height(if (compact) 96.dp else 150.dp)
+            )
+            IconButton(onClick = onZoomOut, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Remove, contentDescription = "Zoom out", tint = Color.White)
             }
         }
+    }
+}
 
-        // Vertical slider track
-        Box(
-            modifier = Modifier
-                .width(4.dp)
-                .height(160.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(Color.White.copy(alpha = 0.3f))
-        ) {
-            // Slider thumb
-            val thumbOffset = ((1f - zoomLevel) * 152f).dp
-            Box(
+/** Vertical slider; top = zoomed in. Tap or drag anywhere on the track. */
+@Composable
+private fun ZoomTrack(
+    fraction: Float,
+    onFractionChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentOnChange by rememberUpdatedState(onFractionChange)
+    val thumbRadiusPx = with(androidx.compose.ui.platform.LocalDensity.current) { 7.dp.toPx() }
+    fun fractionAt(y: Float, height: Int): Float {
+        val usable = (height - 2 * thumbRadiusPx).coerceAtLeast(1f)
+        return (1f - (y - thumbRadiusPx) / usable).coerceIn(0f, 1f)
+    }
+    Box(
+        modifier = modifier
+            .pointerInput(Unit) {
+                detectTapGestures { offset -> currentOnChange(fractionAt(offset.y, size.height)) }
+            }
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragStart = { offset -> currentOnChange(fractionAt(offset.y, size.height)) },
+                    onVerticalDrag = { change, _ ->
+                        change.consume()
+                        currentOnChange(fractionAt(change.position.y, size.height))
+                    }
+                )
+            }
+            .semantics {
+                contentDescription = "Zoom level"
+                stateDescription = "${(fraction * 100).roundToInt()}%"
+                progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
+                setProgress { value ->
+                    currentOnChange(value)
+                    true
+                }
+            }
+            .drawBehind {
+                val centerX = size.width / 2f
+                val top = thumbRadiusPx
+                val bottom = size.height - thumbRadiusPx
+                val thumbY = top + (1f - fraction) * (bottom - top)
+                drawLine(
+                    color = Color.White.copy(alpha = 0.25f),
+                    start = Offset(centerX, top),
+                    end = Offset(centerX, bottom),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawLine(
+                    color = IndowingsGreen,
+                    start = Offset(centerX, thumbY),
+                    end = Offset(centerX, bottom),
+                    strokeWidth = 4.dp.toPx(),
+                    cap = StrokeCap.Round
+                )
+                drawCircle(color = Color.White, radius = thumbRadiusPx, center = Offset(centerX, thumbY))
+            }
+    )
+}
+
+// ═══════════════════════════════════════════════════════════
+// Directional navigation pad (trackball-style)
+// ═══════════════════════════════════════════════════════════
+
+@Composable
+private fun NavigationPad(
+    modifier: Modifier = Modifier,
+    viewMode: ViewMode,
+    onNudge: (NavDirection, Float) -> Unit
+) {
+    val is2D = viewMode == ViewMode.TWO_D
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = DarkToolbar.copy(alpha = 0.92f),
+        shadowElevation = 8.dp
+    ) {
+        Box(modifier = Modifier.size(128.dp)) {
+            // Arrows map to on-screen directions, so they are intentionally not RTL-mirrored.
+            NavArrow(
+                icon = Icons.Default.KeyboardArrowUp,
+                description = if (is2D) "Move north" else "Rotate up",
+                direction = NavDirection.UP,
+                onNudge = onNudge,
+                modifier = Modifier.align(Alignment.TopCenter)
+            )
+            NavArrow(
+                icon = Icons.Default.KeyboardArrowDown,
+                description = if (is2D) "Move south" else "Rotate down",
+                direction = NavDirection.DOWN,
+                onNudge = onNudge,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
+            NavArrow(
+                icon = Icons.Default.KeyboardArrowUp,
+                iconRotation = -90f,
+                description = if (is2D) "Move west" else "Rotate left",
+                direction = NavDirection.LEFT,
+                onNudge = onNudge,
+                modifier = Modifier.align(Alignment.CenterStart)
+            )
+            NavArrow(
+                icon = Icons.Default.KeyboardArrowUp,
+                iconRotation = 90f,
+                description = if (is2D) "Move east" else "Rotate right",
+                direction = NavDirection.RIGHT,
+                onNudge = onNudge,
+                modifier = Modifier.align(Alignment.CenterEnd)
+            )
+            Icon(
+                imageVector = if (is2D) Icons.Default.OpenWith else Icons.Default._3dRotation,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.45f),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = thumbOffset)
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Color.White)
+                    .align(Alignment.Center)
+                    .size(22.dp)
             )
         }
+    }
+}
 
-        // - button
-        Surface(
-            onClick = { onZoomChange((zoomLevel - 0.1f).coerceAtLeast(0f)) },
-            shape = RoundedCornerShape(6.dp),
-            color = IndowingsBlue,
-            modifier = Modifier.size(32.dp)
+/** Moves once on press, then continuously while held. */
+@Composable
+private fun NavArrow(
+    icon: ImageVector,
+    description: String,
+    direction: NavDirection,
+    onNudge: (NavDirection, Float) -> Unit,
+    modifier: Modifier = Modifier,
+    iconRotation: Float = 0f
+) {
+    var pressed by remember { mutableStateOf(false) }
+    val currentOnNudge by rememberUpdatedState(onNudge)
+
+    LaunchedEffect(pressed) {
+        if (!pressed) return@LaunchedEffect
+        currentOnNudge(direction, TAP_NUDGE_SECONDS)
+        var last = withFrameNanos { it }
+        while (true) {
+            val now = withFrameNanos { it }
+            currentOnNudge(direction, (now - last) / 1_000_000_000f)
+            last = now
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(if (pressed) IndowingsGreen.copy(alpha = 0.85f) else Color.Transparent)
+            .pointerInput(Unit) {
+                detectTapGestures(onPress = {
+                    pressed = true
+                    tryAwaitRelease()
+                    pressed = false
+                })
+            }
+            .semantics {
+                role = Role.Button
+                contentDescription = description
+                onClick {
+                    currentOnNudge(direction, ACCESSIBILITY_NUDGE_SECONDS)
+                    true
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier
+                .size(28.dp)
+                .rotate(iconRotation)
+        )
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Model load error
+// ═══════════════════════════════════════════════════════════
+
+@Composable
+private fun ModelErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.zIndex(2f),
+        shape = RoundedCornerShape(16.dp),
+        color = DarkCard.copy(alpha = 0.97f),
+        shadowElevation = 12.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 22.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                Icon(
-                    imageVector = Icons.Default.Remove,
-                    contentDescription = "Zoom out",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
+            Icon(
+                imageVector = Icons.Outlined.ErrorOutline,
+                contentDescription = null,
+                tint = Color(0xFFFF6B6B),
+                modifier = Modifier.size(32.dp)
+            )
+            Text(
+                text = "Couldn't open the model",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+            Text(
+                text = message,
+                color = Color.White.copy(alpha = 0.75f),
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
+                    onClick = onBack,
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))
+                ) {
+                    Text("Back", color = Color.White)
+                }
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(containerColor = IndowingsGreen)
+                ) {
+                    Text("Retry", color = Color.White)
+                }
             }
         }
     }
@@ -689,7 +1045,7 @@ private fun ZoomSlider(
 // ═══════════════════════════════════════════════════════════
 
 @Composable
-private fun IndowingsToast(
+private fun RpavToast(
     message: String,
     onDismiss: () -> Unit
 ) {
@@ -963,33 +1319,19 @@ private fun ViewerDarkGridBackground(modifier: Modifier = Modifier) {
 // ═══════════════════════════════════════════════════════════
 
 private sealed interface ModelLoadState {
-    data object WaitingPath : ModelLoadState
     data object Loading : ModelLoadState
-    data class Loaded(val instance: ModelInstance) : ModelLoadState
+    data class Loaded(val instance: ModelInstance, val framing: ModelFraming) : ModelLoadState
     data class Failed(val message: String) : ModelLoadState
 }
 
-/**
- * Flat terrain meshes collapse to paper-thin sheets after uniform [scaleToUnits] scaling.
- * Stretch Y just enough so relief is visible from the default oblique camera.
- */
-private fun io.github.sceneview.node.ModelNode.applyTerrainHeightExaggeration() {
-    val halfExtents = boundingBox.halfExtent
-    val halfX = halfExtents[0]
-    val halfY = halfExtents[1]
-    val halfZ = halfExtents[2]
-    val horizontalExtent = max(halfX, halfZ).coerceAtLeast(0.001f)
-    val flatness = halfY / horizontalExtent
-    if (flatness >= FLAT_TERRAIN_THRESHOLD) return
-
-    val exaggeration = (FLAT_TERRAIN_TARGET_RATIO / flatness.coerceAtLeast(0.001f))
-        .coerceIn(MIN_HEIGHT_EXAGGERATION, MAX_HEIGHT_EXAGGERATION)
-    scale = Scale(scale.x, scale.y * exaggeration, scale.z)
-    Log.i(
-        TAG,
-        "Applied terrain height exaggeration=${"%.1f".format(exaggeration)}x " +
-            "(halfX=$halfX halfY=$halfY halfZ=$halfZ)"
-    )
+private fun loadErrorMessage(error: Throwable, sizeBytes: Long): String = when (error) {
+    is OutOfMemoryError ->
+        "Not enough memory to display this ${ByteFormat.format(sizeBytes)} model. Close other apps and " +
+            "try again, or use a smaller export (up to 150 MB is supported on 4 GB devices)."
+    is IOException -> "The model file could not be read from device storage. Go back and open the project again."
+    is IllegalArgumentException ->
+        "This GLB file could not be parsed. It may be corrupted or use unsupported glTF extensions."
+    else -> "The model failed to load (${error.message ?: error.javaClass.simpleName})."
 }
 
 private fun logModelBounds(instance: ModelInstance) {
@@ -1003,56 +1345,59 @@ private fun logModelBounds(instance: ModelInstance) {
     )
 }
 
-private fun resolveModelPath(context: Context, sourceUri: String): Result<String> = runCatching {
-    val parsed = Uri.parse(sourceUri)
-    when (parsed.scheme?.lowercase()) {
-        null -> {
-            val file = File(sourceUri)
-            require(file.exists()) { "Model file path does not exist." }
-            file.absolutePath
-        }
-        "file" -> {
-            val file = File(parsed.path.orEmpty())
-            require(file.exists()) { "Model file not found in local storage." }
-            file.absolutePath
-        }
-        "content" -> {
-            val destination = File(
-                context.cacheDir,
-                "active_${sourceUri.hashCode()}.glb"
-            )
-            if (destination.exists() && destination.length() > 0L) {
-                return@runCatching destination.absolutePath
-            }
-            GlbCacheManager.prepareForLargeModelLoad(context, keepAbsolutePath = destination.absolutePath)
-            val inputStream = context.contentResolver.openInputStream(parsed)
-                ?: context.contentResolver.openAssetFileDescriptor(parsed, "r")?.createInputStream()
-                ?: context.contentResolver.openFileDescriptor(parsed, "r")?.let { descriptor ->
-                    android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor)
-                }
-                ?: throw IllegalArgumentException(
-                    "File provider did not return readable stream for: $sourceUri"
-                )
-
-            inputStream.use { input ->
-                GlbCacheManager.copyToCache(input, destination)
-            }
-            require(destination.exists() && destination.length() > 0L) {
-                "Copied GLB cache file is empty."
-            }
-            destination.absolutePath
-        }
-        else -> throw IllegalArgumentException("Unsupported source URI scheme: ${parsed.scheme}")
-    }
-}.onFailure { throwable ->
-    Log.e(TAG, "resolveModelPath failed for uri=$sourceUri", throwable)
-}.recoverCatching { throwable ->
-    val reason = throwable.message ?: throwable.javaClass.simpleName
-    throw IllegalStateException("Unable to read selected GLB: $reason", throwable)
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
+/** SceneView renders into a TextureView, whose current frame can be read back as a bitmap. */
+private fun findTextureView(view: View): TextureView? = when (view) {
+    is TextureView -> view
+    is ViewGroup -> (0 until view.childCount).firstNotNullOfOrNull { findTextureView(view.getChildAt(it)) }
+    else -> null
+}
+
+/** Saves the frame over the viewer background to Pictures/RPAV; returns its MediaStore URI. */
+private suspend fun saveScreenshot(context: Context, frame: Bitmap, projectName: String): Uri =
+    withContext(Dispatchers.IO) {
+        val composed = Bitmap.createBitmap(frame.width, frame.height, Bitmap.Config.ARGB_8888)
+        Canvas(composed).apply {
+            drawColor(DarkSurfaceVariant.toArgb())
+            drawBitmap(frame, 0f, 0f, null)
+        }
+        val safeName = projectName.replace(Regex("[^A-Za-z0-9_-]+"), "_").trim('_').ifEmpty { "model" }
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "RPAV_${safeName}_$timestamp.png")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/RPAV")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IOException("MediaStore insert failed")
+        try {
+            resolver.openOutputStream(uri)?.use { composed.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                ?: throw IOException("Cannot open screenshot output")
+            values.clear()
+            values.put(MediaStore.Images.Media.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+        } catch (e: Exception) {
+            resolver.delete(uri, null, null)
+            throw e
+        } finally {
+            composed.recycle()
+            frame.recycle()
+        }
+        uri
+    }
+
 private const val TAG = "ViewerScreen"
-private const val FLAT_TERRAIN_THRESHOLD = 0.08f
-private const val FLAT_TERRAIN_TARGET_RATIO = 0.18f
-private const val MIN_HEIGHT_EXAGGERATION = 4f
-private const val MAX_HEIGHT_EXAGGERATION = 24f
+private const val MISSING_MODEL_MESSAGE =
+    "The model file is no longer on this device. Go back and open the project again to reload it."
+private const val TEXTURE_WAIT_TIMEOUT_NANOS = 120_000_000_000L
+private const val ORTHO_NEAR = 0.01
+private const val ORTHO_FAR = 1000.0
+private const val TAP_NUDGE_SECONDS = 0.12f
+private const val ACCESSIBILITY_NUDGE_SECONDS = 0.25f

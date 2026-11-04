@@ -40,6 +40,10 @@ class ProjectRepositoryImpl(context: Context) : ProjectRepository {
         writeProjects(updated)
     }
 
+    override suspend fun deleteProject(projectId: String) {
+        writeProjects(getRecentProjects().filterNot { it.id == projectId })
+    }
+
     private fun writeProjects(projects: List<ProjectItem>) {
         val array = JSONArray()
         projects.forEach { array.put(it.toJson()) }
@@ -54,6 +58,8 @@ class ProjectRepositoryImpl(context: Context) : ProjectRepository {
         put("source", source.name)
         put("glbSizeInBytes", glbSizeInBytes)
         put("lastOpenedAt", lastOpenedAt)
+        put("glbRelativePath", glbRelativePath)
+        put("relatedFileCount", relatedFileCount)
     }
 
     private fun JSONObject.toProjectItem(): ProjectItem = ProjectItem(
@@ -63,12 +69,14 @@ class ProjectRepositoryImpl(context: Context) : ProjectRepository {
         glbUri = getString("glbUri"),
         source = ProjectSource.valueOf(getString("source")),
         glbSizeInBytes = getLong("glbSizeInBytes"),
-        lastOpenedAt = getLong("lastOpenedAt")
+        lastOpenedAt = getLong("lastOpenedAt"),
+        glbRelativePath = optString("glbRelativePath"),
+        relatedFileCount = optInt("relatedFileCount")
     )
 
     companion object {
         private const val PREFS_NAME = "aims3d_projects"
         private const val KEY_RECENT_PROJECTS = "recent_projects"
-        private const val MAX_RECENT_PROJECTS = 10
+        const val MAX_RECENT_PROJECTS = 10
     }
 }

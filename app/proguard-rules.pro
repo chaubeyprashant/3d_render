@@ -19,3 +19,17 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Keep line numbers so release crash stack traces stay readable.
+-keepattributes SourceFile,LineNumberTable,Signature,*Annotation*
+
+# Google API client (Drive): JSON models are populated reflectively via @Key fields.
+-keep class com.google.api.services.drive.** { *; }
+-keepclassmembers class * {
+    @com.google.api.client.util.Key <fields>;
+}
+-keep class com.google.api.client.** { *; }
+-dontwarn com.google.api.client.**
+-dontwarn javax.annotation.**
+-dontwarn org.apache.http.**
+-dontwarn javax.naming.**
+-dontwarn org.ietf.jgss.**

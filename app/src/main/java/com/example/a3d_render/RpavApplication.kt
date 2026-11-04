@@ -2,7 +2,7 @@ package com.example.a3d_render
 
 import android.app.Application
 
-class Aims3dApplication : Application() {
+class RpavApplication : Application() {
 
     lateinit var container: AppContainer
         private set

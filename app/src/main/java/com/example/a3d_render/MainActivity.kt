@@ -8,7 +8,7 @@ import com.example.a3d_render.ui.navigation.AppNavHost
 import com.example.a3d_render.ui.theme._3d_renderTheme
 
 class MainActivity : ComponentActivity() {
-    private val appContainer by lazy { AppContainer(applicationContext) }
+    private val appContainer by lazy { (application as RpavApplication).container }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
