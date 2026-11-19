@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.util.Log
+import com.example.a3d_render.data.drive.DrivePublicDownloader
 import com.example.a3d_render.data.drive.GoogleDriveManager
+import com.example.a3d_render.domain.project.ParsedDriveLink
+import com.example.a3d_render.domain.project.DriveLinkParser
 import com.example.a3d_render.data.onedrive.OneDriveAuthRequiredException
 import com.example.a3d_render.data.onedrive.OneDriveHttpException
 import com.example.a3d_render.data.onedrive.OneDriveManager
@@ -30,6 +33,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import java.io.File
 import java.io.IOException
 
@@ -57,6 +61,7 @@ class ProjectLibrary(
     private val oneDriveManager: OneDriveManager
 ) {
     private val cache = ProjectCache(File(context.filesDir, "projects"))
+    private val driveDownloader = DrivePublicDownloader()
     private val importer = ProjectImporter(
         hardLimitBytes = GlbSizePolicy.hardLimitBytes(DeviceCapabilities.totalRamBytes(context))
     )
@@ -99,6 +104,52 @@ class ProjectLibrary(
             PreparedImport(plan, folderName, tree, "drive:folder:$folderId", ProjectSource.GOOGLE_DRIVE, folderId)
         }
 
+    /**
+     * A publicly shared Drive file link. The GLB is downloaded to a temp file, then imported
+     * the same way as a single local GLB. [onProgress] is the download fraction, or null when
+     * Drive does not report a size.
+     */
+    suspend fun prepareDriveLink(rawLink: String, onProgress: (Float?) -> Unit = {}): PreparedImport =
+        withContext(Dispatchers.IO) {
+            val parsed = DriveLinkParser.parse(rawLink)
+            parsed.rejectionMessage()?.let { throw ProjectImportException(it) }
+            val file = parsed as ParsedDriveLink.File
+            requireOnline(ProjectSource.GOOGLE_DRIVE)
+            val temp = driveLinkTemp(file.id)
+            val downloadedName = driveDownloader.download(
+                fileId = file.id,
+                resourceKey = file.resourceKey,
+                destination = temp,
+                maxBytes = GlbSizePolicy.hardLimitBytes(DeviceCapabilities.totalRamBytes(context)),
+                onProgress = onProgress
+            )
+            val name = if (downloadedName.endsWith(".glb", ignoreCase = true)) {
+                downloadedName
+            } else {
+                "${downloadedName.substringBeforeLast('.').ifBlank { downloadedName }}.glb"
+            }
+            val tree = LocalFileSourceTree(temp, name)
+            val plan = try {
+                guardSourceErrors(ProjectSource.GOOGLE_DRIVE) {
+                    scanSingleFile(tree, name) { missing ->
+                        "This GLB uses separate files (${missing.first()}${if (missing.size > 1) " and ${missing.size - 1} more" else ""}). " +
+                            "A Drive link can only open a GLB with those files embedded."
+                    }
+                }
+            } catch (t: Throwable) {
+                temp.delete()
+                throw t
+            }
+            PreparedImport(
+                plan,
+                name.substringBeforeLast('.').ifBlank { name },
+                tree,
+                "$DRIVE_LINK_PREFIX${file.id}",
+                ProjectSource.GOOGLE_DRIVE,
+                rawLink.trim()
+            )
+        }
+
     /** A GLB tapped directly in the Drive browser; its folder supplies any related files. */
     suspend fun prepareDriveFile(parentId: String, parentName: String, file: DriveFileItem): PreparedImport =
         withContext(Dispatchers.IO) {
@@ -133,6 +184,14 @@ class ProjectLibrary(
 
     suspend fun import(prepared: PreparedImport, onProgress: (Float) -> Unit): ProjectItem =
         withContext(Dispatchers.IO) {
+            try {
+                importPrepared(prepared, onProgress)
+            } finally {
+                deleteDriveLinkTemp(prepared.projectId)
+            }
+        }
+
+    private suspend fun importPrepared(prepared: PreparedImport, onProgress: (Float) -> Unit): ProjectItem {
             val plan = prepared.plan
             val required = plan.totalBytes + STORAGE_HEADROOM_BYTES
             val available = context.filesDir.usableSpace
@@ -159,7 +218,7 @@ class ProjectLibrary(
             }
             val directory = cache.commit(prepared.projectId, staging)
             val existingName = repository.getRecentProjects().firstOrNull { it.id == prepared.projectId }?.name
-            save(
+            return save(
                 ProjectItem(
                     id = prepared.projectId,
                     name = existingName ?: prepared.displayName,
@@ -172,7 +231,7 @@ class ProjectLibrary(
                     relatedFileCount = plan.resources.size
                 )
             )
-        }
+    }
 
     /** Returns the project ready to view, re-fetching it from its source if the cache was evicted. */
     suspend fun open(project: ProjectItem, onProgress: (Float) -> Unit): ProjectItem =
@@ -188,6 +247,12 @@ class ProjectLibrary(
                     PreparedImport(plan, project.name, tree, project.id, project.source, project.folderUri),
                     onProgress
                 )
+            }
+            if (project.id.startsWith(DRIVE_LINK_PREFIX)) {
+                val prepared = prepareDriveLink(project.folderUri) { fraction ->
+                    if (fraction != null) onProgress(fraction * 0.9f)
+                }
+                return@withContext import(prepared) { fraction -> onProgress(0.9f + fraction * 0.1f) }
             }
             val tree = when (project.source) {
                 ProjectSource.LOCAL -> openLocalTree(Uri.parse(project.folderUri))
@@ -285,6 +350,16 @@ class ProjectLibrary(
         throw ProjectImportException("The saved location is not a folder. Select the project folder again.", e)
     }
 
+    private fun driveLinkTemp(fileId: String) = File(context.cacheDir, "drive-link-$fileId.part")
+
+    /** Drops a Drive-link download that the user chose not to open. */
+    fun releaseDriveLinkDownload(projectId: String) = deleteDriveLinkTemp(projectId)
+
+    private fun deleteDriveLinkTemp(projectId: String) {
+        if (!projectId.startsWith(DRIVE_LINK_PREFIX)) return
+        driveLinkTemp(projectId.removePrefix(DRIVE_LINK_PREFIX)).delete()
+    }
+
     private fun openLocalFile(documentUri: Uri): SingleDocumentSourceTree = try {
         SingleDocumentSourceTree(context, documentUri)
     } catch (e: SecurityException) {
@@ -292,14 +367,19 @@ class ProjectLibrary(
     }
 
     /** Validated by its GLB header, so downloads renamed like `model.glb (1)` still open. */
-    private fun scanSingleFile(tree: SingleDocumentSourceTree): ImportPlan = try {
-        importer.scan(tree, tree.file.name)
+    private fun scanSingleFile(tree: SingleDocumentSourceTree): ImportPlan = scanSingleFile(tree, tree.file.name)
+
+    private fun scanSingleFile(
+        tree: ProjectSourceTree,
+        fileName: String,
+        separateFilesMessage: (List<String>) -> String = { missing ->
+            "This GLB uses separate texture files (${missing.first()}${if (missing.size > 1) " and ${missing.size - 1} more" else ""}). " +
+                "Open the folder that contains it instead of the single file."
+        }
+    ): ImportPlan = try {
+        importer.scan(tree, fileName)
     } catch (e: MissingRelatedFilesException) {
-        throw ProjectImportException(
-            "This GLB uses separate texture files (${e.missing.first()}${if (e.missing.size > 1) " and ${e.missing.size - 1} more" else ""}). " +
-                "Open the folder that contains it instead of the single file.",
-            e
-        )
+        throw ProjectImportException(separateFilesMessage(e.missing), e)
     }
 
     private fun requireOnline(source: ProjectSource) {
@@ -371,6 +451,7 @@ class ProjectLibrary(
     private companion object {
         const val STORAGE_HEADROOM_BYTES = 64L * 1024L * 1024L
         const val FILE_PROJECT_PREFIX = "file:"
+        const val DRIVE_LINK_PREFIX = "drive-link:"
         const val TAG = "ProjectLibrary"
         /** Written after a complete import; holds the prepared GLB's length. */
         const val CACHE_MARKER = "prepared.txt"

@@ -1,10 +1,7 @@
 package com.example.a3d_render.ui.navigation
 
-import android.app.Activity
 import android.app.Application
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,7 +26,6 @@ import com.example.a3d_render.ui.dashboard.DashboardViewModel
 import com.example.a3d_render.ui.dashboard.rememberGlbFilePicker
 import com.example.a3d_render.ui.dashboard.rememberProjectFolderPicker
 import com.example.a3d_render.ui.drive.DrivePickerScreen
-import com.example.a3d_render.ui.drive.DrivePickerViewModel
 import com.example.a3d_render.ui.onedrive.OneDrivePickerViewModel
 import com.example.a3d_render.ui.viewer.ViewerScreen
 
@@ -37,7 +33,6 @@ private const val SPLASH_ROUTE = "splash"
 private const val LOCKED_ROUTE = "locked"
 private const val LOGIN_ROUTE = "login"
 private const val DASHBOARD_ROUTE = "dashboard"
-private const val DRIVE_PICKER_ROUTE = "drive_picker"
 private const val ONEDRIVE_PICKER_ROUTE = "onedrive_picker"
 private const val VIEWER_ROUTE = "viewer"
 private const val ARG_NAME = "name"
@@ -138,7 +133,11 @@ fun AppNavHost(appContainer: AppContainer) {
                 importState = importState,
                 onLocalFolderPickerClick = localPicker,
                 onLocalFilePickerClick = filePicker,
-                onDriveClick = { navController.navigate(DRIVE_PICKER_ROUTE) },
+                onDriveLink = { link ->
+                    dashboardViewModel.onDriveLink(link) { project ->
+                        navController.navigate(project.viewerRoute())
+                    }
+                },
                 onOneDriveClick = { navController.navigate(ONEDRIVE_PICKER_ROUTE) },
                 onOpenProject = { project ->
                     dashboardViewModel.openProject(project) { opened ->
@@ -156,61 +155,6 @@ fun AppNavHost(appContainer: AppContainer) {
                         popUpTo(0) { inclusive = true }
                     }
                 }
-            )
-        }
-
-        composable(DRIVE_PICKER_ROUTE) {
-            val drivePickerViewModel: DrivePickerViewModel = viewModel(
-                factory = DrivePickerViewModel.Factory(
-                    application = application,
-                    driveManager = appContainer.driveManager,
-                    projectLibrary = appContainer.projectLibrary
-                )
-            )
-            val uiState by drivePickerViewModel.uiState.collectAsState()
-            val importState by drivePickerViewModel.importState.collectAsState()
-            val listAuthIntent by drivePickerViewModel.authRecoveryIntent.collectAsState()
-
-            val signInLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.StartActivityForResult()
-            ) { result ->
-                drivePickerViewModel.handleSignInResult(result.data)
-            }
-            val authRecoveryLauncher = rememberLauncherForActivityResult(
-                ActivityResultContracts.StartActivityForResult()
-            ) { result ->
-                if (result.resultCode == Activity.RESULT_OK) drivePickerViewModel.loadCurrentFolder()
-            }
-            val pendingAuthIntent = listAuthIntent ?: importState.driveAuthIntent
-            LaunchedEffect(pendingAuthIntent) {
-                pendingAuthIntent?.let {
-                    drivePickerViewModel.consumeAuthRecoveryIntent()
-                    authRecoveryLauncher.launch(it)
-                }
-            }
-
-            val openViewer: (ProjectItem) -> Unit = { project ->
-                navController.navigate(project.viewerRoute()) {
-                    popUpTo(DRIVE_PICKER_ROUTE) { inclusive = true }
-                }
-            }
-
-            DrivePickerScreen(
-                uiState = uiState,
-                importState = importState,
-                onSignInClick = { signInLauncher.launch(drivePickerViewModel.getSignInIntent()) },
-                onSignOutClick = drivePickerViewModel::signOut,
-                onFolderClick = drivePickerViewModel::openFolder,
-                onGlbClick = { file -> drivePickerViewModel.openGlbFile(file, openViewer) },
-                onBreadcrumbClick = drivePickerViewModel::navigateTo,
-                onOpenFolderAsProject = { drivePickerViewModel.openCurrentFolderAsProject(openViewer) },
-                onRetry = drivePickerViewModel::loadCurrentFolder,
-                onNavigateUp = {
-                    if (!drivePickerViewModel.navigateUp()) navController.popBackStack()
-                },
-                onConfirmLargeFile = drivePickerViewModel::confirmLargeFile,
-                onDismissLargeFile = drivePickerViewModel::dismissLargeFile,
-                onDismissImportError = drivePickerViewModel::clearImportError
             )
         }
 

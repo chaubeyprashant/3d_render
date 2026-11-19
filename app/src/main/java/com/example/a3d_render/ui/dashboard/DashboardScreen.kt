@@ -51,6 +51,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,11 +69,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.a3d_render.domain.model.ProjectItem
 import com.example.a3d_render.domain.model.ProjectSource
+import com.example.a3d_render.domain.project.DriveLinkParser
 import com.example.a3d_render.ui.common.ImportProgressOverlay
 import com.example.a3d_render.ui.common.ImportState
 import com.example.a3d_render.ui.common.LargeFileDialog
@@ -107,7 +112,7 @@ fun DashboardScreen(
     importState: ImportState,
     onLocalFolderPickerClick: () -> Unit,
     onLocalFilePickerClick: () -> Unit,
-    onDriveClick: () -> Unit,
+    onDriveLink: (String) -> Unit,
     onOneDriveClick: () -> Unit,
     onOpenProject: (ProjectItem) -> Unit,
     onRenameProject: (projectId: String, newName: String) -> Unit,
@@ -122,6 +127,7 @@ fun DashboardScreen(
     var renameText by rememberSaveable { mutableStateOf("") }
     var deleteTarget by remember { mutableStateOf<ProjectItem?>(null) }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showDriveLinkDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(importState.error) {
         val message = importState.error ?: return@LaunchedEffect
@@ -164,7 +170,7 @@ fun DashboardScreen(
                     WelcomeSection(
                         onLocalFolderPickerClick = onLocalFolderPickerClick,
                         onLocalFilePickerClick = onLocalFilePickerClick,
-                        onDriveClick = onDriveClick,
+                        onDriveClick = { showDriveLinkDialog = true },
                         onOneDriveClick = onOneDriveClick
                     )
                 }
@@ -212,6 +218,16 @@ fun DashboardScreen(
 
             importState.progress?.let { ImportProgressOverlay(progress = it) }
         }
+    }
+
+    if (showDriveLinkDialog) {
+        DriveLinkDialog(
+            onDismiss = { showDriveLinkDialog = false },
+            onDownload = { link ->
+                showDriveLinkDialog = false
+                onDriveLink(link)
+            }
+        )
     }
 
     importState.largeFilePrompt?.let { prompt ->
@@ -415,7 +431,7 @@ private fun WelcomeSection(
 
         // Subtitle
         Text(
-            text = "Select a project folder from device storage, Google Drive or OneDrive. The GLB model and its related files are detected and loaded automatically.",
+            text = "Load a project folder from this device, paste a shared Google Drive GLB link, or browse OneDrive.",
             fontSize = 13.sp,
             color = TextSecondary,
             lineHeight = 19.sp
@@ -446,7 +462,7 @@ private fun WelcomeSection(
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "Google Drive",
+                    text = "Drive link",
                     color = TextPrimary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
@@ -719,12 +735,80 @@ private fun EmptyState() {
                 color = TextPrimary
             )
             Text(
-                text = "Load a project folder from your device or Google Drive to get started.",
+                text = "Load a project from this device, a Google Drive link, or OneDrive to get started.",
                 fontSize = 13.sp,
                 color = TextSecondary
             )
         }
     }
+}
+
+// ───────────────────────────────────────────── Drive link
+
+@Composable
+private fun DriveLinkDialog(onDismiss: () -> Unit, onDownload: (String) -> Unit) {
+    var link by rememberSaveable { mutableStateOf("") }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
+    val submit = {
+        val rejection = DriveLinkParser.parse(link).rejectionMessage()
+        if (rejection == null) onDownload(link.trim()) else error = rejection
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        containerColor = CardBg,
+        title = { Text("Open from Google Drive", fontWeight = FontWeight.Bold, color = TextPrimary) },
+        text = {
+            Column {
+                Text(
+                    text = "Paste a shared link to a .glb file. In Google Drive, set the file to Anyone with the link.",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = link,
+                    onValueChange = {
+                        link = it
+                        error = null
+                    },
+                    isError = error != null,
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = RoundedCornerShape(10.dp),
+                    label = { Text("Drive link", color = TextSecondary) },
+                    supportingText = {
+                        Text(
+                            text = error ?: "https://drive.google.com/file/d/…/view",
+                            color = if (error != null) StatusRed else TextDim,
+                            fontSize = 12.sp
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { submit() }),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        focusedBorderColor = AccentGreen,
+                        unfocusedBorderColor = ChipBorder,
+                        cursorColor = AccentGreen
+                    )
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = submit) {
+                Text("Download", fontWeight = FontWeight.SemiBold, color = AccentGreen)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel", color = TextSecondary) }
+        }
+    )
 }
 
 // ───────────────────────────────────────────── Pickers

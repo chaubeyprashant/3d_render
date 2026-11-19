@@ -65,6 +65,16 @@ class DashboardViewModel(
         )
     }
 
+    fun onDriveLink(link: String, onProjectReady: (ProjectItem) -> Unit) {
+        importController.importDriveLink(
+            prepare = { report -> projectLibrary.prepareDriveLink(link, report) },
+            onReady = { project ->
+                refreshRecentProjects()
+                onProjectReady(project)
+            }
+        )
+    }
+
     fun onGlbFilePicked(uri: Uri, onProjectReady: (ProjectItem) -> Unit) {
         importController.importNew(
             scanMessage = "Checking GLB file…",

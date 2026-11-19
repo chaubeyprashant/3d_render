@@ -77,6 +77,27 @@ class ImportController(
         }
     }
 
+    /**
+     * Downloads a pasted Google Drive link (reporting download progress), then copies it like any
+     * other new project.
+     */
+    fun importDriveLink(
+        prepare: suspend (report: (Float?) -> Unit) -> PreparedImport,
+        onReady: (ProjectItem) -> Unit
+    ) = launchGuarded(ImportProgress("Downloading from Google Drive…", null)) {
+        val prepared = prepare { fraction ->
+            _state.update { it.copy(progress = ImportProgress(driveDownloadMessage(fraction), fraction)) }
+        }
+        if (prepared.plan.exceedsRecommendedSize) {
+            pending = prepared to onReady
+            _state.update {
+                it.copy(progress = null, largeFilePrompt = LargeFilePrompt(prepared.displayName, prepared.plan.glbSizeBytes))
+            }
+        } else {
+            copy(prepared, onReady)
+        }
+    }
+
     fun confirmLargeFile() {
         val (prepared, onReady) = pending ?: return
         pending = null
@@ -85,6 +106,7 @@ class ImportController(
     }
 
     fun dismissLargeFile() {
+        pending?.first?.let { library.releaseDriveLinkDownload(it.projectId) }
         pending = null
         _state.update { it.copy(largeFilePrompt = null) }
     }
@@ -106,6 +128,11 @@ class ImportController(
         val current = _state.value.progress
         if (current?.fraction != null && (current.fraction * 100).roundToInt() == percent) return
         _state.update { it.copy(progress = ImportProgress(copyMessage(source, fraction), fraction)) }
+    }
+
+    private fun driveDownloadMessage(fraction: Float?): String {
+        if (fraction == null) return "Downloading from Google Drive…"
+        return "Downloading from Google Drive… ${(fraction * 100).roundToInt()}%"
     }
 
     private fun copyMessage(source: ProjectSource, fraction: Float): String {
